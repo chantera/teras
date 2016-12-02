@@ -1,2 +1,2 @@
-# pyapp
-Useful Implementations for Python Applications
+# nlplibs-py
+Useful libraries for Natural Language Processing with Python
