@@ -206,6 +206,7 @@ class App(Singleton, Callable):
 
     def __initialize(self):
         self._initialize()
+        self._name = sys.argv[0]
         self._def_arg('--debug', type=str, default=self._debug,
                       help='Enable debug mode')
         self._def_arg('--logdir', type=str, default=self._logdir,
