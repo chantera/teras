@@ -6,6 +6,7 @@ import argparse
 from collections.abc import Callable
 from datetime import datetime
 from dateutil.tz import tzlocal
+from inspect import getfile
 import logging
 import os
 import signal
@@ -200,6 +201,9 @@ class App(Singleton, Callable):
     @classmethod
     def _def_arg(cls, *args, **kwargs):
         cls.__defined_args.append((args, kwargs))
+
+    def __init__(self):
+        self._basedir = os.path.dirname(os.path.realpath(getfile(self.__class__)))
 
     def _initialize(self):
         pass

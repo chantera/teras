@@ -81,7 +81,11 @@ class Preprocessor:
                         embeddings.append(np.array(vector, dtype=np.float32))
         else:
             with open(embed_file) as f:
-                for line in f:
+                lines = f.readlines()
+                index = 0
+                if len(lines[0].strip().split(" ")) <= 2:
+                    index = 1  # skip header
+                for line in lines[index:]:
                     cols = line.strip().split(" ")
                     word = cols[0]
                     if word not in vocabulary:
