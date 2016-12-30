@@ -181,17 +181,16 @@ class App(Singleton, Callable):
     def main(self):
         raise NotImplementedError()
 
-    @classmethod
     def configure(
-            cls,
+            self,
             logdir=_logdir,
             loglevel=_loglevel,
             verbose=_verbose,
             debug=_debug):
-        cls._loglevel = loglevel
-        cls._verbose = verbose
-        cls._logdir = logdir
-        cls._debug = debug
+        self._loglevel = loglevel
+        self._verbose = verbose
+        self._logdir = logdir
+        self._debug = debug
 
     @classmethod
     def exec(cls):
