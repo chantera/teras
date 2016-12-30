@@ -204,6 +204,7 @@ class App(Singleton, Callable):
 
     def __init__(self):
         self._basedir = os.path.dirname(os.path.realpath(getfile(self.__class__)))
+        self._logdir = self._basedir + '/logs'
 
     def _initialize(self):
         pass
