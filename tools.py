@@ -105,9 +105,9 @@ class Preprocessor:
         self._new_embeddings.append(word_vector)
         return index
 
-    def fit(self, raw_documents):
+    def fit(self, raw_documents, preprocess=True):
         for document in raw_documents:
-            self._fit_each(document)
+            self._fit_each(document, preprocess)
         return self
 
     def _fit_each(self, raw_document, preprocess=True):
@@ -120,10 +120,10 @@ class Preprocessor:
     def fit_one(self, raw_document, preprocess=True):
         return self._fit_each(raw_document, preprocess)
 
-    def transform(self, raw_documents, length=None):
+    def transform(self, raw_documents, length=None, preprocess=True):
         samples = []
         for document in raw_documents:
-            samples.append(self._transform_each(document, length))
+            samples.append(self._transform_each(document, length, preprocess))
         if length:
             samples = np.array(samples, dtype=np.int32)
         return samples
@@ -156,8 +156,8 @@ class Preprocessor:
     def _preprocess_token(token):
         return re.sub(r'^\d+(,\d+)*(\.\d+)?$', '<NUM>', token.lower())
 
-    def fit_transform(self, raw_documents, length=None):
-        return self.fit(raw_documents).transform(raw_documents, length)
+    def fit_transform(self, raw_documents, length=None, preprocess=True):
+        return self.fit(raw_documents).transform(raw_documents, length, preprocess)
 
     def fit_transform_one(self, raw_document, length=None, preprocess=True):
         return self._fit_each(raw_document, preprocess)._transform_each(raw_document, length, preprocess)
