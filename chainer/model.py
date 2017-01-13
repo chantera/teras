@@ -1,7 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-from chainer import Chain, ChainList, Variable
+import queue
+
+from chainer import Chain, ChainList, cuda, Variable
 import chainer.functions as F
 import chainer.links as L
 from chainer.links.connection.n_step_lstm import argsort_list_descent, permutate_list
@@ -172,3 +174,48 @@ class CRF(L.CRF1d):
         score, path = super(CRF, self).argmax(xs)
         path = F.transpose_sequence(path)
         return score, path
+
+    def argnmax(self, xs, n=10):
+        cost = cuda.to_cpu(self.cost.data)
+        xs = permutate_list(xs, argsort_list_descent(xs), inv=False)
+        xs = [cuda.to_cpu(x.data) for x in xs]
+
+        scores = []
+        paths = []
+
+        for _xs in xs:
+            alphas = [_xs[0]]
+            for x in _xs[1:]:
+                alpha = np.max(alphas[-1] + cost, axis=1) + x
+                alphas.append(alpha)
+
+            _scores = []
+            _paths = []
+            _end = len(_xs) - 1
+            buf = n
+
+            c = queue.PriorityQueue()
+            q = queue.PriorityQueue()
+            x = _xs[_end]
+            for i in range(x.shape[0]):
+                q.put((-alphas[_end][i], -x[i], _end, np.random.random(), np.array([i], np.int32)))
+            while not q.empty() and c.qsize() < n + buf:
+                beta, score, time, r, path = q.get()
+                if time == 0:
+                    c.put((score, r, path))
+                    continue
+                t = time - 1
+                x = _xs[t]
+                for i in range(x.shape[0]):
+                    _trans = score - cost[i, path[-1]]
+                    _beta = -alphas[t][i] + _trans
+                    _score = _trans - x[i]
+                    q.put((_beta, _score, t, np.random.random(), np.append(path, i)))
+            while not c.empty() and len(_paths) < n:
+                score, r, path = c.get()
+                _scores.append(-score)
+                _paths.append(path[::-1])
+            scores.append(_scores)
+            paths.append(_paths)
+
+        return scores, paths
