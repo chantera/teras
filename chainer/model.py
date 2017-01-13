@@ -218,3 +218,42 @@ class CRF(L.CRF1d):
             paths.append(_paths)
 
         return scores, paths
+
+
+class CharCNN(Chain):
+
+    def __init__(self, char_embeddings, window_size=3, dropout=0.5):
+        char_vocab_size, char_embed_size = char_embeddings.shape
+        super(CharCNN, self).__init__(
+            embed=L.EmbedID(
+                in_size=char_vocab_size,
+                out_size=char_embed_size,
+                initialW=char_embeddings,
+            ),
+            conv=L.Convolution2D(
+                in_channels=1,
+                out_channels=1,
+                ksize=(1, window_size),
+                stride=(1, 1),
+                pad=(0, int(window_size / 2)),
+                wscale=1,
+                initialW=None,
+                nobias=True,
+                use_cudnn=True,
+            ),
+        )
+        self._dropout = dropout
+
+    def __call__(self, chars, train=True):
+        if type(chars) == list:
+            return F.vstack([self.forward_one(_chars, train) for _chars in chars])
+        return self.forward_one(chars, train)
+
+    def forward_one(self, chars, train=True):
+        x = self.embed(self.xp.array(chars))
+        x = F.dropout(x, self._dropout, train)
+        h, w = x.shape
+        C = self.conv(F.reshape(x, (1, 1, h, w)))
+        A = F.max_pooling_2d(C, ksize=(h, 1), stride=None, pad=0, use_cudnn=True)
+        y = F.reshape(A, (w,))
+        return y
