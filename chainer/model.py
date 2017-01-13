@@ -92,16 +92,15 @@ class LSTM(L.NStepLSTM):
 
 class BLSTM(Chain):
 
-    def __init__(self, n_units, dropout=0.5, train=True):
+    def __init__(self, n_units, dropout=0.5):
         super(BLSTM, self).__init__(
             f_lstm=LSTM(n_units, n_units, dropout),
             b_lstm=LSTM(n_units, n_units, dropout),
         )
         self._dropout = dropout
         self._n_units = n_units
-        self.train = train
 
-    def __call__(self, xs):
+    def __call__(self, xs, train=True):
         self.f_lstm.reset_state()
         self.b_lstm.reset_state()
         xs_f = []
@@ -109,8 +108,8 @@ class BLSTM(Chain):
         for x in xs:
             xs_f.append(x)
             xs_b.append(x[::-1])
-        hs_f = self.f_lstm(xs_f, self.train)
-        hs_b = self.b_lstm(xs_b, self.train)
+        hs_f = self.f_lstm(xs_f, train)
+        hs_b = self.b_lstm(xs_b, train)
         ys = [F.concat([h_f, h_b[::-1]]) for h_f, h_b in zip(hs_f, hs_b)]
         return ys
 
