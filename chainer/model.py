@@ -1,12 +1,13 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+import math
 import queue
 
-from chainer import Chain, ChainList, cuda, Variable
+from chainer import Chain, ChainList, cuda, initializers, link, Variable
 import chainer.functions as F
 import chainer.links as L
-from chainer.links.connection.n_step_lstm import argsort_list_descent, permutate_list
+from chainer.links.connection.n_step_rnn import argsort_list_descent, permutate_list
 import numpy as np
 
 
@@ -91,6 +92,7 @@ class LSTM(L.NStepLSTM):
 
 
 class BLSTM(Chain):
+    """@TODO: implement same interface as FastBLSTM"""
 
     def __init__(self, n_units, dropout=0.5):
         super(BLSTM, self).__init__(
@@ -111,6 +113,17 @@ class BLSTM(Chain):
         hs_f = self.f_lstm(xs_f, train)
         hs_b = self.b_lstm(xs_b, train)
         ys = [F.concat([h_f, h_b[::-1]]) for h_f, h_b in zip(hs_f, hs_b)]
+        return ys
+
+
+class FastBLSTM(L.NStepBiLSTM):
+
+    def __init__(self, n_layers, in_size, out_size, dropout=0.5, use_cudnn=True):
+        super(FastBLSTM, self).__init__(n_layers, in_size, out_size, dropout, use_cudnn)
+
+    def __call__(self, xs, train=True):
+        hx, cx = None, None
+        hy, cy, ys = super(FastBLSTM, self).__call__(hx, cx, xs, train)
         return ys
 
 
@@ -257,3 +270,40 @@ class CharCNN(Chain):
         A = F.max_pooling_2d(C, ksize=(h, 1), stride=None, pad=0, use_cudnn=True)
         y = F.reshape(A, (w,))
         return y
+
+
+class Biaffine(link.Link):
+
+    def __init__(self, in_size, out_size, wscale=1, initialW=None):
+        super(Biaffine, self).__init__()
+        self.initialW = initialW
+        self.wscale = wscale
+        self.out_size = out_size
+        self._W_initializer = initializers._get_initializer(
+            initialW, math.sqrt(wscale))
+        self._initialize_params(in_size)
+
+    def _initialize_params(self, in_size):
+        self.add_param('W', (in_size + 1, self.out_size),
+                       initializer=self._W_initializer)
+
+    def __call__(self, x1, x2):
+        """https://github.com/tdozat/Parser/blob/master/lib/linalg.py"""
+        dim = len(x1.shape)
+        if dim == 3:
+            return self.forward_batch(x1, x2)
+        elif dim == 2:
+            return self.forward_one(x1, x2)
+        else:
+            raise RuntimeError()
+
+    def forward_one(self, x1, x2):
+        xp = cuda.get_array_module(x1.data)
+        l, d = x2.shape
+        return F.matmul(F.concat([x1, xp.ones((l, 1), 'f')]), F.matmul(self.W, x2, transb=True))
+
+    def forward_batch(self, x1, x2):
+        xp = cuda.get_array_module(x1.data)
+        b, l, d = x2.shape
+        return F.batch_matmul(F.concat([x1, xp.ones((b, l, 1), 'f')], 2),
+                              F.reshape(F.linear(F.reshape(x2, (b * l, -1)), self.W), (b, l, -1)), transb=True)
