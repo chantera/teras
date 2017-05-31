@@ -34,6 +34,39 @@ class Embed(ChainList):
         return hs
 
 
+class MLP(ChainList):
+
+    def __init__(self, layers):
+        assert all(type(layer) == MLP.Layer for layer in layers)
+        super(MLP, self).__init__(*layers)
+
+    def __call__(self, x, train=False):
+        for layer in self:
+            x = layer(x, train)
+        return x
+
+    class Layer(L.Linear):
+
+        def __init__(self, in_size, out_size, wscale=1, bias=0, nobias=False,
+                     initialW=None, initial_bias=None, activation=None, dropout=0):
+            super(MLP.Layer, self).__init__(in_size, out_size, wscale, bias, nobias, initialW, initial_bias)
+            if activation is None:
+                self._activate = lambda x: x
+            else:
+                assert callable(activation) and hasattr(F.activation, activation.__name__)
+                self._activate = activation
+            assert dropout == 0 or type(dropout) == float
+            self._dropout_ratio = dropout
+            if dropout > 0:
+                self._dropout_func = lambda x, ratio, train: F.dropout(x, ratio, train)
+            else:
+                self._dropout_func = lambda x, ratio, train: x
+
+        def __call__(self, x, train=False):
+            y = super(MLP.Layer, self).__call__(x)
+            return self._dropout_func(self._activate(y), self._dropout_ratio, train)
+
+
 class LSTM(L.NStepLSTM):
 
     def __init__(self, in_size, out_size, dropout=0.5, use_cudnn=True):
