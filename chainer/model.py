@@ -1,9 +1,5 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-
 """
-This is a useful library for Chainer v1.24.0
-*** Warning: This file is no longer maintained. ***
+This library includes neural network models implemented with Chainer (v2.0.0)
 """
 
 import math
@@ -45,16 +41,16 @@ class MLP(ChainList):
         assert all(type(layer) == MLP.Layer for layer in layers)
         super(MLP, self).__init__(*layers)
 
-    def __call__(self, x, train=False):
+    def __call__(self, x):
         for layer in self:
-            x = layer(x, train)
+            x = layer(x)
         return x
 
     class Layer(L.Linear):
 
-        def __init__(self, in_size, out_size, wscale=1, bias=0, nobias=False,
+        def __init__(self, in_size, out_size=None, nobias=False,
                      initialW=None, initial_bias=None, activation=None, dropout=0):
-            super(MLP.Layer, self).__init__(in_size, out_size, wscale, bias, nobias, initialW, initial_bias)
+            super(MLP.Layer, self).__init__(in_size, out_size, nobias, initialW, initial_bias)
             if activation is None:
                 self._activate = lambda x: x
             else:
@@ -63,109 +59,39 @@ class MLP(ChainList):
             assert dropout == 0 or type(dropout) == float
             self._dropout_ratio = dropout
             if dropout > 0:
-                self._dropout_func = lambda x, ratio, train: F.dropout(x, ratio, train)
+                self._dropout_func = lambda x, ratio: F.dropout(x, ratio)
             else:
-                self._dropout_func = lambda x, ratio, train: x
+                self._dropout_func = lambda x, ratio: x
 
-        def __call__(self, x, train=False):
+        def __call__(self, x):
             y = super(MLP.Layer, self).__call__(x)
-            return self._dropout_func(self._activate(y), self._dropout_ratio, train)
+            return self._dropout_func(self._activate(y), self._dropout_ratio)
 
 
 class LSTM(L.NStepLSTM):
 
-    def __init__(self, in_size, out_size, dropout=0.5, use_cudnn=True):
-        n_layers = 1
-        super(LSTM, self).__init__(n_layers, in_size, out_size, dropout, use_cudnn)
-        self.state_size = out_size
-        self.reset_state()
+    def __init__(self, n_layers, in_size, out_size, dropout=0.5):
+        super(LSTM, self).__init__(n_layers, in_size, out_size, dropout)
 
-    def to_cpu(self):
-        super(LSTM, self).to_cpu()
-        if self.cx is not None:
-            self.cx.to_cpu()
-        if self.hx is not None:
-            self.hx.to_cpu()
-
-    def to_gpu(self, device=None):
-        super(LSTM, self).to_gpu(device)
-        if self.cx is not None:
-            self.cx.to_gpu(device)
-        if self.hx is not None:
-            self.hx.to_gpu(device)
-
-    def set_state(self, cx, hx):
-        assert isinstance(cx, Variable)
-        assert isinstance(hx, Variable)
-        cx_ = cx
-        hx_ = hx
-        if self.xp == np:
-            cx_.to_cpu()
-            hx_.to_cpu()
-        else:
-            cx_.to_gpu()
-            hx_.to_gpu()
-        self.cx = cx_
-        self.hx = hx_
-
-    def reset_state(self):
-        self.cx = self.hx = None
-
-    def __call__(self, xs, train=True):
-        batch = len(xs)
-        if self.hx is None:
-            xp = self.xp
-            self.hx = Variable(
-                xp.zeros((self.n_layers, batch, self.state_size), dtype=xs[0].dtype),
-                volatile='auto')
-        if self.cx is None:
-            xp = self.xp
-            self.cx = Variable(
-                xp.zeros((self.n_layers, batch, self.state_size), dtype=xs[0].dtype),
-                volatile='auto')
-
-        hy, cy, ys = super(LSTM, self).__call__(self.hx, self.cx, xs, train)
-        self.hx, self.cx = hy, cy
-        return ys
-
-
-class BLSTM(Chain):
-    """@TODO: implement same interface as FastBLSTM"""
-
-    def __init__(self, n_units, dropout=0.5):
-        super(BLSTM, self).__init__(
-            f_lstm=LSTM(n_units, n_units, dropout),
-            b_lstm=LSTM(n_units, n_units, dropout),
-        )
-        self._dropout = dropout
-        self._n_units = n_units
-
-    def __call__(self, xs, train=True):
-        self.f_lstm.reset_state()
-        self.b_lstm.reset_state()
-        xs_f = []
-        xs_b = []
-        for x in xs:
-            xs_f.append(x)
-            xs_b.append(x[::-1])
-        hs_f = self.f_lstm(xs_f, train)
-        hs_b = self.b_lstm(xs_b, train)
-        ys = [F.concat([h_f, h_b[::-1]]) for h_f, h_b in zip(hs_f, hs_b)]
-        return ys
-
-
-class FastBLSTM(L.NStepBiLSTM):
-
-    def __init__(self, n_layers, in_size, out_size, dropout=0.5, use_cudnn=True):
-        super(FastBLSTM, self).__init__(n_layers, in_size, out_size, dropout, use_cudnn)
-
-    def __call__(self, xs, train=True):
+    def __call__(self, xs):
         hx, cx = None, None
-        hy, cy, ys = super(FastBLSTM, self).__call__(hx, cx, xs, train)
+        hy, cy, ys = super(BiLSTM, self).__call__(hx, cx, xs)
+        return ys
+
+
+class BiLSTM(L.NStepBiLSTM):
+
+    def __init__(self, n_layers, in_size, out_size, dropout=0.5):
+        super(BiLSTM, self).__init__(n_layers, in_size, out_size, dropout)
+
+    def __call__(self, xs):
+        hx, cx = None, None
+        hy, cy, ys = super(BiLSTM, self).__call__(hx, cx, xs)
         return ys
 
 
 class GlobalAttention(Chain):
+    """This model has not been updated and tested for Chainer v2.0.0"""
 
     def __init__(self, n_units, score_func='general'):
         links = {}
@@ -207,6 +133,7 @@ class GlobalAttention(Chain):
 
 
 class CRF(L.CRF1d):
+    """This model has not been updated and tested for Chainer v2.0.0"""
 
     def __init__(self, n_label):
         super(CRF, self).__init__(n_label)
@@ -272,6 +199,7 @@ class CRF(L.CRF1d):
 
 
 class CharCNN(Chain):
+    """This model has not been updated and tested for Chainer v2.0.0"""
 
     def __init__(self, char_embeddings, window_size=3, dropout=0.5):
         char_vocab_size, char_embed_size = char_embeddings.shape
@@ -311,6 +239,7 @@ class CharCNN(Chain):
 
 
 class Biaffine(link.Link):
+    """This model has not been updated and tested for Chainer v2.0.0"""
 
     def __init__(self, in_size, out_size, wscale=1, initialW=None):
         super(Biaffine, self).__init__()
