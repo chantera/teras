@@ -90,6 +90,28 @@ class BiLSTM(L.NStepBiLSTM):
         return ys
 
 
+class GRU(L.NStepGRU):
+
+    def __init__(self, n_layers, in_size, out_size, dropout=0.5):
+        super(GRU, self).__init__(n_layers, in_size, out_size, dropout)
+
+    def __call__(self, xs):
+        hx = None
+        hy, ys = super(BiGRU, self).__call__(hx, xs)
+        return ys
+
+
+class BiGRU(L.NStepBiGRU):
+
+    def __init__(self, n_layers, in_size, out_size, dropout=0.5):
+        super(BiGRU, self).__init__(n_layers, in_size, out_size, dropout)
+
+    def __call__(self, xs):
+        hx = None
+        hy, ys = super(BiGRU, self).__call__(hx, xs)
+        return ys
+
+
 class GlobalAttention(Chain):
     """This model has not been updated and tested for Chainer v2.0.0"""
 
