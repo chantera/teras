@@ -3,12 +3,14 @@ from datetime import datetime
 import logging
 import logging.config
 import os
+import sys
 import time
 import uuid
 
 from dateutil.tz import tzlocal
 
 
+DISABLE = sys.maxsize
 CRITICAL = logging.CRITICAL
 FATAL = logging.FATAL
 ERROR = logging.ERROR
@@ -19,6 +21,7 @@ DEBUG = logging.DEBUG
 TRACE = 5
 NOTSET = logging.NOTSET
 
+logging.addLevelName(DISABLE, 'disabled')
 logging.addLevelName(CRITICAL, 'critical')
 logging.addLevelName(FATAL, 'fatal')
 logging.addLevelName(ERROR, 'error')
@@ -73,7 +76,8 @@ class ColoredFormatter(Formatter):
         s = super(ColoredFormatter, self).format(record)
         level = record.levelno
         if level in ColoredFormatter.COLORS:
-            s = ColoredFormatter.FORMAT % (30 + ColoredFormatter.COLORS[level], s)
+            s = (ColoredFormatter.FORMAT
+                 % (30 + ColoredFormatter.COLORS[level], s))
         return s
 
 
@@ -118,6 +122,9 @@ class RootLogger(Logger):
 
 
 def setRootLogger(root):
+    if not isinstance(root, Logger):
+            raise TypeError("logger not derived from teras.logging.Logger: "
+                            + type(root).__name__)
     logging.root = root
     Logger.root = root
     Logger.manager.root = root
@@ -157,9 +164,10 @@ class AppLogger(Logger):
         if len(self.handlers) == 0:
             logdir = config['logdir']
             if logdir:
-                logdir = os.path.abspath(os.path.expanduser())
+                logdir = os.path.abspath(os.path.expanduser(logdir))
                 if not os.path.isdir(logdir):
-                    raise FileNotFoundError("logdir was not found: '%s'" % logdir)
+                    raise FileNotFoundError("logdir was not found: "
+                                            "'%s'" % logdir)
                 logdir += '/'
             else:
                 logdir = ''
@@ -167,21 +175,26 @@ class AppLogger(Logger):
 
             file_handler = logging.FileHandler(logfile, mode='a')
             file_handler.setLevel(config['level'])
-            file_handler.setFormatter(Formatter(config['fmt'], config['datefmt']))
+            file_handler.setFormatter(
+                Formatter(config['fmt'], config['datefmt']))
             self.addHandler(file_handler)
 
             stream_handler = logging.StreamHandler()
-            stream_handler.setLevel(config['level'])
-            stream_handler.setFormatter(ColoredFormatter(config['fmt'], config['datefmt']))
+            stream_handler.setLevel(config['verbosity'])
+            stream_handler.setFormatter(
+                ColoredFormatter(config['fmt'], config['datefmt']))
             self.addHandler(stream_handler)
 
         message = "LOG Start with ACCESSID=[%s] UNIQUEID=[%s] ACCESSTIME=[%s]"
         self.info(message % (self._accessid, self._uniqueid, self._accesstime))
 
     def finalize(self):
-        processtime = '%3.9f' % (datetime.now(tzlocal()) - self._accesssec).total_seconds()
-        message = "LOG End with ACCESSID=[%s] UNIQUEID=[%s] ACCESSTIME=[%s] PROCESSTIME=[%s]\n"
-        self.info(message % (self._accessid, self._uniqueid, self._accesstime, processtime))
+        processtime = ('%3.9f' % (datetime.now(tzlocal())
+                                  - self._accesssec).total_seconds())
+        message = ("LOG End with ACCESSID=[%s] UNIQUEID=[%s] "
+                   "ACCESSTIME=[%s] PROCESSTIME=[%s]\n")
+        self.info(message % (self._accessid, self._uniqueid,
+                             self._accesstime, processtime))
         super(AppLogger, self).finalize()
 
     def filter(self, record):
