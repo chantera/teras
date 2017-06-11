@@ -249,7 +249,6 @@ class App(AppBase):
         default_logdir = basedir + '/logs'
         loglevel = (kwargs['loglevel']
                     if 'loglevel' in kwargs else logging.INFO)
-        print(kwargs, loglevel)
         cls.add_arg('basedir', basedir)
         cls.add_arg('debug', arg('--debug',
                                  type=str,
@@ -271,7 +270,9 @@ class App(AppBase):
     def _preprocess(self):
         verbose = not(self._config['quiet'])
         if self._config['debug']:
-            self._config['loglevel'] = logging.DEBUG
+            if (self._config['loglevel'] < logging.DISABLE
+                    and self._config['loglevel'] > logging.DEBUG):
+                self._config['loglevel'] = logging.DEBUG
         logger_name = self._config['script_name']
         logger_config = {
             'logdir': self._config['logdir'],
