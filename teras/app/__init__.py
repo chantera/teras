@@ -8,28 +8,27 @@ from ..base import Singleton
 # from .. import logging
 
 
-class CmdlineArg(object):
+class _Args(object):
 
-    def __init__(self, *args, **kwargs):
-        self._args = args
-        self._kwargs = kwargs
+    class CmdlineArg(object):
 
-    @property
-    def args(self):
-        return self._args
+        def __init__(self, *args, **kwargs):
+            self._args = args
+            self._kwargs = kwargs
 
-    @property
-    def kwargs(self):
-        return self._kwargs
+        @property
+        def args(self):
+            return self._args
 
-    def add_arg(self, value):
-        self._args.append(value)
+        @property
+        def kwargs(self):
+            return self._kwargs
 
-    def add_kwarg(self, name, value):
-        self._kwargs[name] = value
+        def add_arg(self, value):
+            self._args.append(value)
 
-
-class _CommandArgs(object):
+        def add_kwarg(self, name, value):
+            self._kwargs[name] = value
 
     def __init__(self):
         self._sys_argv = sys.argv
@@ -41,7 +40,7 @@ class _CommandArgs(object):
         self._group_descriptions = {}
 
     def def_arg(self, name, value):
-        if type(value) == CmdlineArg:
+        if type(value) == _Args.CmdlineArg:
             value.add_kwarg('dest', name)
             self._common_cmd_args[name] = value
         else:
@@ -50,7 +49,7 @@ class _CommandArgs(object):
     def def_group_arg(self, group, name, value):
         if group not in self._groups:
             self.add_group(group)
-        if type(value) == CmdlineArg:
+        if type(value) == _Args.CmdlineArg:
             value.add_kwarg('dest', name)
             self._group_cmd_args[group][name] = value
         else:
@@ -63,67 +62,151 @@ class _CommandArgs(object):
             self._group_const_args[group] = {}
             self._group_descriptions[group] = description
 
-    def _init_parser(self):
-        num_cmds = len(self._groups)
-        if num_cmds == 0:
-            raise RuntimeError("At least one command should be defined.")
+    @property
+    def sys_argv(self):
+        return self._sys_argv
 
-        parser = ArgumentParser()
+    @property
+    def common_cmd_args(self):
+        return self._common_cmd_args
 
-        for name, value in self._common_cmd_args.items():
-            parser.add_argument(*value.args, **value.kwargs)
+    @property
+    def common_const_args(self):
+        return self._common_const_args
 
-        if num_cmds == 1:
-            """register arguments as common"""
-            group = self._groups[0]
-            for name, value in self._group_cmd_args[group].items():
-                parser.add_argument(*value.args, **value.kwargs)
-        else:
-            """register arguments as groups"""
-            subparsers = parser.add_subparsers(title='commands', help='available commands', dest='command')
-            subparsers.required = True
-            for group in self._groups:
-                subparser = subparsers.add_parser(group, help=self._group_descriptions[group])
-                for name, value in self._group_cmd_args[group].items():
-                    subparser.add_argument(*value.args, **value.kwargs)
+    @property
+    def groups(self):
+        return self._groups
 
-        return parser
+    @property
+    def group_cmd_args(self):
+        return self._group_cmd_args
 
-    def parse(self, command=None):
-        parser = self._init_parser()
-        grouped = len(self._groups) > 1
+    @property
+    def group_const_args(self):
+        return self._group_const_args
 
-        _args = self._sys_argv[1:]
-        if command is not None:
-            if command not in self._groups:
-                raise ValueError("Undefined command is specified.")
-            if grouped:
-                _args = [command].extend(_args)
-
-        args = vars(parser.parse_args(_args))
-        if not grouped:
-            args['command'] = self._groups[0]
-        group = args['command']
-        assert command is None or command == group
-        command_args = {arg: args[arg] for arg in self._group_cmd_args[group].keys()}
-        common_args = {arg: args[arg] for arg in self._common_cmd_args.keys()}
-        for name, value in self._group_const_args[group].items():
-            command_args[name] = value
-        for name, value in self._common_const_args.items():
-            common_args[name] = value
-
-        return command_args, common_args
+    @property
+    def group_descriptions(self):
+        return self._group_descriptions
 
 
 def arg(*args, **kwargs):
-    return CmdlineArg(*args, **kwargs)
+    return _Args.CmdlineArg(*args, **kwargs)
+
+
+def _init_parser(args):
+    num_cmds = len(args.groups)
+    if num_cmds == 0:
+        raise RuntimeError("At least one command should be defined.")
+
+    parser = ArgumentParser()
+
+    for name, value in args.common_cmd_args.items():
+        parser.add_argument(*value.args, **value.kwargs)
+
+    if num_cmds == 1:
+        """register arguments as common"""
+        group = args.groups[0]
+        for name, value in args.group_cmd_args[group].items():
+            parser.add_argument(*value.args, **value.kwargs)
+    else:
+        """register arguments as groups"""
+        subparsers = parser.add_subparsers(title='commands', help='available commands', dest='command')
+        subparsers.required = True
+        for group in args.groups:
+            subparser = subparsers.add_parser(group, help=args.group_descriptions[group])
+            for name, value in args.group_cmd_args[group].items():
+                subparser.add_argument(*value.args, **value.kwargs)
+
+    return parser
+
+
+def _parse_args(def_args, command=None):
+    parser = _init_parser(def_args)
+    grouped = len(def_args.groups) > 1
+
+    _args = def_args.sys_argv[1:]
+    if command is not None:
+        if command not in def_args.groups:
+            raise ValueError("Undefined command is specified.")
+        if grouped:
+            _args = [command].extend(_args)
+
+    parsed_args = vars(parser.parse_args(_args))
+    if not grouped:
+        parsed_args['command'] = def_args.groups[0]
+    group = parsed_args['command']
+    assert command is None or command == group
+    command_args = {arg: parsed_args[arg] for arg in def_args.group_cmd_args[group].keys()}
+    common_args = {arg: parsed_args[arg] for arg in def_args.common_cmd_args.keys()}
+    for name, value in def_args.group_const_args[group].items():
+        command_args[name] = value
+    for name, value in def_args.common_const_args.items():
+        common_args[name] = value
+    command = group
+
+    return command, command_args, common_args
 
 
 class AppBase(Singleton):
     __instance = None
+    _commands = {}
+    _args = _Args()
 
     def __init__(self):
         raise NotImplementedError()
+
+    @classmethod
+    def add_command(cls, name, command, args={}, description=None):
+        assert type(args) == dict
+        cls._args.add_group(name, description)
+        for arg_name, value in args.items():
+            cls.add_arg(arg_name, value, group=name)
+        cls._commands[name] = command
+
+    @classmethod
+    def add_arg(cls, name, value, group=None):
+        if group is None:
+            cls._args.def_arg(name, value)
+        else:
+            cls._args.def_group_arg(group, name, value)
+
+    @classmethod
+    def run(cls, command=None):
+        command, command_args, common_args = _parse_args(cls._args, command)
+        """
+        try {
+            # // umaskは共通
+            # umask(0);
+            // インスタンスの生成
+            $oSelf = static::_getInstance();
+            // 初期化
+            $oSelf->_initialize();
+            // コントローラの処理実行
+            $oSelf->_preProcess();
+            $oSelf->_process();
+            $oSelf->_postProcess();
+            // 終了化
+            $oSelf->_finalize();
+        } catch (\Exception $oException) {
+            // ログを出力
+            \Log::exception($oException, __METHOD__ . '::' . __LINE__);
+            // 例外画面の出力
+            call_user_func(static::ERRORHANDLER, $oException, 500);
+        }
+        return true;
+        """
+
+        print(command_args, common_args)
+
+    @classmethod
+    def _get_instance(cls):
+        if cls.__instance is None:
+            instance = object.__new__(cls)
+            instance._initialize()
+            cls.__instance = instance
+        return cls.__instance
 
     def _initialize(self):
         if hasattr(self, '_initialized') and self._initialized:
@@ -134,95 +217,24 @@ class AppBase(Singleton):
         self._verbose = True
         self._debug = True
 
-        self._commands = {}
-        self._args = _CommandArgs()
-
         self._initialized = True
 
-    @classmethod
-    def _get_instance(cls):
-        if cls.__instance is None:
-            instance = object.__new__(cls)
-            instance._initialize()
-            cls.__instance = instance
-        return cls.__instance
+    def _preprocess(self, *args, **kwargs):
+        pass
 
-    @classmethod
-    def add_command(cls, name, command, args={}, description=None):
-        assert type(args) == dict
-        instance = cls._get_instance()
-        instance._args.add_group(name, description)
-        for arg_name, value in args.items():
-            instance._add_arg(arg_name, value, group=name)
-        instance._commands[name] = command
+    def _process(self):
+        pass
 
-    @classmethod
-    def add_arg(cls, name, value, group=None):
-        return cls._get_instance()._add_arg(name, value, group)
+    def _postprocess(self, *args, **kwargs):
+        pass
 
-    def _add_arg(self, name, value, group=None):
-        if group is None:
-            self._args.def_arg(name, value)
-        else:
-            self._args.def_group_arg(group, name, value)
-
-    @classmethod
-    def run(cls, command=None):
-        command_args, common_args = cls._get_instance()._args.parse(command)
-        print(command_args, common_args)
-
-    """
-    def _parse_args(self):
-        num_cmds = len(self._commands)
-        if num_cmds == 0:
-            raise RuntimeError("At least one command should be defined.")
-        elif num_cmds == 1:
-            pass
-
-        constants = {}
-
-        parser = ArgumentParser()
-        _constants = {}
-        for arg, value in self._defined_args[AppBase.DEFAULT_ARG_GROUP].items():
-            if type(value) == CmdArg:
-                kwargs = value.kwargs
-                kwargs['dest'] = arg
-                parser.add_argument(*value.args, **kwargs)
-            else:
-                _constants[arg] = value
-        constants[AppBase.DEFAULT_ARG_GROUP] = _constants
-
-        subparsers = parser.add_subparsers(title='commands', dest='command')
-        subparsers.required = True
-        for command in self._commands.keys():
-            _constants = {}
-            subparser = subparsers.add_parser(command)
-            for arg, value in self._defined_args[command].items():
-                if type(value) == CmdArg:
-                    kwargs = value.kwargs
-                    kwargs['dest'] = arg
-                    subparser.add_argument(*value.args, **kwargs)
-                else:
-                    _constants[arg] = value
-            constants[command] = _constants
-
-        args = vars(parser.parse_args())
-        for group_name in (AppBase.DEFAULT_ARG_GROUP, args['command']):
-            print(type(args), args)
-            print(constants[group_name])
-            args.update(constants[group_name])
-            # for arg, value in constants[group_name]:
-            #     if arg not in args:
-            #         args[arg] = value
-            #     if not hasattr(self, arg):
-            #         setattr(self, arg, value)
-
-        return args
-    """
+    # def _exec(self, func, args):
 
     @classmethod
     def configure(cls):
         pass
+
+    """
 
     # @classmethod
     # def configure(
@@ -240,7 +252,7 @@ class AppBase(Singleton):
     def _def_arg(cls, *args, **kwargs):
         cls.__defined_args.append((args, kwargs))
 
-    """
+
     def __init__(self):
         self._basedir = os.path.dirname(os.path.realpath(getfile(self.__class__)))
         self._logdir = self._basedir + '/logs'
