@@ -39,7 +39,7 @@ config = {
     'update': _update,
     'hooks': {
         TrainEvent.EPOCH_TRAIN_BEGIN: chainer_train_on,
-        TrainEvent.EPOCH_VALIDATION_BEGIN: chainer_train_off,
+        TrainEvent.EPOCH_VALIDATE_BEGIN: chainer_train_off,
     },
     'callbacks': []
 }

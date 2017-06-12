@@ -13,8 +13,8 @@ class TrainEvent(Event):
     EPOCH_END = 'epoch_end'
     EPOCH_TRAIN_BEGIN = 'epoch_train_begin'
     EPOCH_TRAIN_END = 'epoch_train_end'
-    EPOCH_VALIDATION_BEGIN = 'epoch_validation_begin'
-    EPOCH_VALIDATION_END = 'epoch_validation_end'
+    EPOCH_VALIDATE_BEGIN = 'epoch_validate_begin'
+    EPOCH_VALIDATE_END = 'epoch_validate_end'
     BATCH_BEGIN = 'batch_begin'
     BATCH_END = 'batch_end'
 
@@ -122,9 +122,9 @@ class Trainer(EventSender):
         if verbose:
             callback = ProgressCallback()
             if do_validation:
-                callback.implement(TrainEvent.EPOCH_VALIDATION_BEGIN,
+                callback.implement(TrainEvent.EPOCH_VALIDATE_BEGIN,
                                    callback.init_progressbar)
-                callback.implement(TrainEvent.EPOCH_VALIDATION_END,
+                callback.implement(TrainEvent.EPOCH_VALIDATE_END,
                                    callback.finish_progressbar)
             self.attach_callback(callback, update=True)
 
@@ -136,7 +136,7 @@ class Trainer(EventSender):
                                   data['size'],
                                   data['loss'])))
         if do_validation:
-            self.add_hook(TrainEvent.EPOCH_VALIDATION_END,
+            self.add_hook(TrainEvent.EPOCH_VALIDATE_END,
                           lambda data: Log.i(
                               "[validation] epoch {} - "
                               "#samples: {}, loss: {}"
@@ -157,7 +157,7 @@ class Trainer(EventSender):
         logs['num_batches'] = num_batches
         logs['loss'] = None
         self.notify(TrainEvent.EPOCH_TRAIN_BEGIN
-                    if train else TrainEvent.EPOCH_VALIDATION_BEGIN, logs)
+                    if train else TrainEvent.EPOCH_VALIDATE_BEGIN, logs)
         logs['loss'] = 0.0
         for batch_index, batch in enumerate(
                 dataset.batch(batch_size, colwise=True, shuffle=train)):
@@ -190,4 +190,4 @@ class Trainer(EventSender):
 
         logs['loss'] /= num_batches
         self.notify(TrainEvent.EPOCH_TRAIN_END
-                    if train else TrainEvent.EPOCH_VALIDATION_END, logs)
+                    if train else TrainEvent.EPOCH_VALIDATE_END, logs)
