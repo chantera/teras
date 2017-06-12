@@ -1,6 +1,8 @@
 # from abc import abstractmethod
+from collections.abc import Callable
 from enum import Enum
 import math
+from types import MethodType
 
 from .. import logging as Log
 from ..base import Observable
@@ -21,9 +23,70 @@ class Event(Enum):
     BATCH_END = 'batch_end'
 
 
-# class Callback(object):
+class Callback(Callable):
+
+    def implement(self, event, func):
+        if type(event) == Event:
+            event = event.value
+        method_name = 'on_' + event
+        setattr(self, method_name, MethodType(func, self))
+        return True
+
+    def __call__(self, event, data=None):
+        if type(event) == Event:
+            event = event.value
+        method_name = 'on_' + event
+        return getattr(self, method_name)(data)
+
+    def implemented(self, event):
+        if type(event) == Event:
+            event = event.value
+        method_name = 'on_' + event
+        return hasattr(self, method_name)
+
+
+class Hoge(Callback):
+
+    # def on_train_end(self, data=None):
+    #     print('UPDATED')
+    #     pass
+
+    def on_train_begin(self, data=None):
+        print('*** UPDATED ***', data)
+        # self.implement("train_end", self.test)
+
+
+h = Hoge()
+h.on_train_begin("hoge")
+# h("train_begin", "test")
+print(h.implemented(Event.TRAIN_END))
+h.implement(Event.TRAIN_END, lambda self, data: print(data))
+h.on_train_end("test")
+# h.get_listeners()
+print(h.implemented(Event.TRAIN_END))
+h("train_begin", Event.TRAIN_BEGIN == "train_begin")
+assert False
+
+
+# if not Callback.define_event_callback:
+#     for event in Event:
+#         def func(self, data):
+#             print(self.val, id(self))
+#             print('*************', data)
+#             pass
+#         method_name = 'on_' + event.value
+#         setattr(Callback, method_name, func)
+#     Callback.define_event_callback = True
 #
-#     a
+# # print(Callback.on_train_begin)
+# # print(Callback.on_train_end)
+# c = Callback()
+# c.on_batch_begin(False)
+# c1 = Callback()
+# c1.on_train_end({})
+# c2 = Hoge()
+# c2.on_train_end({})
+# assert False
 
 
 class Trainer(Observable):
