@@ -38,6 +38,46 @@ class ProgressCallback(Callback):
         self._pbar.finish()
 
 
+class Reporter(Callback):
+
+    def __init__(self, accuracy_func, name="reporter", **kwargs):
+        super(Reporter, self).__init__(name, **kwargs)
+        self._acc_func = accuracy_func
+        self._logs = {}
+        self._history = []
+
+    def get_history(self):
+        return self._history
+
+    def on_epoch_train_begin(self, data):
+        self._logs = {
+            'accuracy': 0.0,
+            'loss': 0.0,
+        }
+
+    on_epoch_validate_begin = on_epoch_train_begin
+
+    def on_batch_end(self, data):
+        accuracy = self._acc_func(data['ys'], data['ts'])
+        self._logs['accuracy'] += accuracy
+
+    def on_epoch_train_end(self, data):
+        metrics = {
+            'accuracy': self._logs['accuracy'] / data['num_batches'],
+            'loss': data['loss']
+        }
+        Log.i("accuracy: {}".format(metrics['accuracy']))
+        self._history.append({'training': metrics, 'validation': None})
+
+    def on_epoch_validate_end(self, data):
+        metrics = {
+            'accuracy': self._logs['accuracy'] / data['num_batches'],
+            'loss': data['loss']
+        }
+        Log.i("accuracy: {}".format(metrics['accuracy']))
+        self._history[-1]['validation'] = metrics
+
+
 class Trainer(EventSender):
     EventClass = TrainEvent
 
