@@ -229,6 +229,8 @@ class AppBase(Singleton):
 
     def _process(self):
         kwargs = self._command_args
+        logging.d("App._process(self) called - command: {}, args: {}"
+                  .format(self._command, kwargs))
         self._command(**kwargs)
 
     def _postprocess(self):
@@ -287,7 +289,7 @@ class App(AppBase):
 
         logger.v(str(os.uname()))
         logger.v("sys.argv: %s" % str(sys.argv))
-        logger.v(self._config)
+        logger.v("app._config: {}".format(self._config))
         logger.i("*** [START] ***")
 
     def _postprocess(self):
