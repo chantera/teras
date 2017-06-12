@@ -52,6 +52,7 @@ import teras.logging as Log
 
 def train(n_epoch=20,
           batch_size=100,
+          n_layers=3,
           n_units=1000,
           dropout=0.2,
           gpu=-1,
@@ -71,17 +72,18 @@ def train(n_epoch=20,
     Log.i('# epoch: {}'.format(n_epoch))
     Log.i('# gpu: {}'.format(gpu))
     Log.i('# model: {}'.format(MLP))
+    Log.i('# layer: {}'.format(n_layers))
     Log.i('# unit: {}'.format(n_units))
     Log.i('# dropout: {}'.format(dropout))
     Log.v('--------------------------------')
     Log.v('')
 
     # set up a neural network model
-    model = MLP([
-        MLP.Layer(None, n_units, F.relu, dropout),
-        MLP.Layer(None, n_units, F.relu, dropout),
-        MLP.Layer(None, 10),
-    ])
+    assert n_layers >= 1
+    layers = [MLP.Layer(None, n_units, F.relu, dropout)
+              for i in range(n_layers - 1)]
+    layers.append(MLP.Layer(None, 10))
+    model = MLP(layers)
     if gpu >= 0:
         chainer.cuda.get_device_from_id(gpu).use()
         model.to_gpu()
@@ -174,6 +176,8 @@ App.add_command('train', train, {
     'n_epoch':
     arg('--epoch', '-e', type=int, default=20,
         help='Number of sweeps over the dataset to train'),
+    'n_layers':
+    arg('--layer', '-l', type=int, default=3, help='Number of layers'),
     'n_units':
     arg('--unit', '-u', type=int, default=1000, help='Number of units')
 }, description="execute train")
