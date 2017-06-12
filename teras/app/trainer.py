@@ -1,7 +1,4 @@
-# from abc import abstractmethod
-# from collections.abc import Callable
 import math
-# from types import MethodType
 
 from .. import logging as Log
 from ..base.event import Callback, Event, EventSender
@@ -41,57 +38,6 @@ class ProgressCallback(Callback):
         self._pbar.finish()
 
 
-"""
-for event in TrainEvent:
-    print(str(event))
-assert False
-
-
-class Hoge(Callback):
-
-    # def on_train_end(self, data=None):
-    #     print('UPDATED')
-    #     pass
-
-    def on_train_begin(self, data=None):
-        print('*** UPDATED ***', data)
-        # self.implement("train_end", self.test)
-
-
-h = Hoge()
-h.on_train_begin("hoge")
-# h("train_begin", "test")
-print(h.implemented(Event.TRAIN_END))
-h.implement(Event.TRAIN_END, lambda self, data: print(data))
-h.on_train_end("test")
-# h.get_listeners()
-print(h.implemented(Event.TRAIN_END))
-h("train_begin", Event.TRAIN_BEGIN == "train_begin")
-assert False
-
-
-# if not Callback.define_event_callback:
-#     for event in Event:
-#         def func(self, data):
-#             print(self.val, id(self))
-#             print('*************', data)
-#             pass
-#         method_name = 'on_' + event.value
-#         setattr(Callback, method_name, func)
-#     Callback.define_event_callback = True
-#
-# # print(Callback.on_train_begin)
-# # print(Callback.on_train_end)
-# c = Callback()
-# c.on_batch_begin(False)
-# c1 = Callback()
-# c1.on_train_end({})
-# c2 = Hoge()
-# c2.on_train_end({})
-# assert False
-"""
-
-
 class Trainer(EventSender):
     EventClass = TrainEvent
 
@@ -109,9 +55,6 @@ class Trainer(EventSender):
             loss.backward()
             optimizer.update()
         self._update = update
-        # self.add_hook(Event.TRAIN_BEGIN,
-        #               lambda x: print(Event.TRAIN_BEGIN, x))
-        # self._context
 
     def fit(self,
             x,
@@ -136,11 +79,41 @@ class Trainer(EventSender):
         else:
             do_validation = False
 
+        self._init_events_on_fit(do_validation, verbose)
+
+        forward = (self._model if callable(self._model)
+                   else self._model.forward())
+        lossfun = self._loss_func
+
+        history = []
+
+        self.notify(TrainEvent.TRAIN_BEGIN)
+
+        for epoch in range(1, epochs + 1):
+            epoch_logs = {
+                'epoch': epoch,
+                'size': train_dataset.size,
+            }
+            self.notify(TrainEvent.EPOCH_BEGIN, epoch_logs)
+
+            self._process(forward, train_dataset, lossfun,
+                          batch_size, epoch_logs)
+            if do_validation:
+                self._process(forward, val_dataset, lossfun,
+                              batch_size, epoch_logs, train=False)
+
+            self.notify(TrainEvent.EPOCH_END, epoch_logs)
+
+        self.notify(TrainEvent.TRAIN_END)
+
+        return history
+
+    def _init_events_on_fit(self, do_validation, verbose=True):
         if verbose:
             callback = ProgressCallback()
             if do_validation:
                 callback.implement(TrainEvent.EPOCH_VALIDATION_BEGIN,
-                                   callback.update_progressbar)
+                                   callback.init_progressbar)
                 callback.implement(TrainEvent.EPOCH_VALIDATION_END,
                                    callback.finish_progressbar)
             self.attach_callback(callback, update=True)
@@ -160,32 +133,6 @@ class Trainer(EventSender):
                               .format(data['epoch'],
                                       data['size'],
                                       data['loss'])))
-
-        forward = (self._model if callable(self._model)
-                   else self._model.forward())
-        lossfun = self._loss_func
-
-        self.notify(TrainEvent.TRAIN_BEGIN)
-
-        for epoch in range(1, epochs + 1):
-            epoch_logs = {
-                'epoch': epoch,
-                'size': train_dataset.size,
-            }
-            epoch_logs['loss'] = []
-            self.notify(TrainEvent.EPOCH_BEGIN, epoch_logs)
-
-            self._process(forward, train_dataset, lossfun,
-                          batch_size, epoch_logs)
-            if do_validation:
-                self._process(forward, val_dataset, lossfun,
-                              batch_size, epoch_logs, train=False)
-
-            self.notify(TrainEvent.EPOCH_END, epoch_logs)
-
-        self.notify(TrainEvent.TRAIN_END)
-
-        # return history
 
     def _process(self,
                  forward,
