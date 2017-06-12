@@ -1,16 +1,15 @@
 # from abc import abstractmethod
-from collections.abc import Callable
-from enum import Enum
+# from collections.abc import Callable
 import math
-from types import MethodType
+# from types import MethodType
 
 from .. import logging as Log
-from ..base import Observable
+from ..base.event import Callback, Event, EventSender
 from ..dataset import Dataset
 from ..utils.progressbar import ProgressBar
 
 
-class Event(Enum):
+class TrainEvent(Event):
     TRAIN_BEGIN = 'train_begin'
     TRAIN_END = 'train_end'
     EPOCH_BEGIN = 'epoch_begin'
@@ -23,26 +22,29 @@ class Event(Enum):
     BATCH_END = 'batch_end'
 
 
-class Callback(Callable):
+class ProgressCallback(Callback):
 
-    def implement(self, event, func):
-        if type(event) == Event:
-            event = event.value
-        method_name = 'on_' + event
-        setattr(self, method_name, MethodType(func, self))
-        return True
+    def __init__(self, name="progress_callback", **kwargs):
+        super(ProgressCallback, self).__init__(name, **kwargs)
+        self._pbar = ProgressBar()
+        self.implement(TrainEvent.EPOCH_TRAIN_BEGIN, self.init_progressbar)
+        self.implement(TrainEvent.BATCH_BEGIN, self.update_progressbar)
+        self.implement(TrainEvent.EPOCH_TRAIN_END, self.finish_progressbar)
 
-    def __call__(self, event, data=None):
-        if type(event) == Event:
-            event = event.value
-        method_name = 'on_' + event
-        return getattr(self, method_name)(data)
+    def init_progressbar(self, data):
+        self._pbar.start(data['size'])
 
-    def implemented(self, event):
-        if type(event) == Event:
-            event = event.value
-        method_name = 'on_' + event
-        return hasattr(self, method_name)
+    def update_progressbar(self, data):
+        self._pbar.update((data['batch_size'] * data['batch_index']) + 1)
+
+    def finish_progressbar(self, data):
+        self._pbar.finish()
+
+
+"""
+for event in TrainEvent:
+    print(str(event))
+assert False
 
 
 class Hoge(Callback):
@@ -87,9 +89,11 @@ assert False
 # c2 = Hoge()
 # c2.on_train_end({})
 # assert False
+"""
 
 
-class Trainer(Observable):
+class Trainer(EventSender):
+    EventClass = TrainEvent
 
     def __init__(self, optimizer, model, loss_func):
         super(Trainer, self).__init__()
@@ -133,39 +137,35 @@ class Trainer(Observable):
             do_validation = False
 
         if verbose:
-            pbar = ProgressBar()
-            self.add_hook(Event.EPOCH_TRAIN_BEGIN,
-                          lambda data: pbar.start(data['size']))
-            self.add_hook(Event.BATCH_BEGIN,
-                          lambda data:
-                          pbar.update((batch_size * data['batch_index']) + 1))
-            self.add_hook(Event.EPOCH_TRAIN_END,
-                          lambda data: pbar.finish())
-            self.add_hook(Event.EPOCH_TRAIN_END,
+            callback = ProgressCallback()
+            if do_validation:
+                callback.implement(TrainEvent.EPOCH_VALIDATION_BEGIN,
+                                   callback.update_progressbar)
+                callback.implement(TrainEvent.EPOCH_VALIDATION_END,
+                                   callback.finish_progressbar)
+            self.attach_callback(callback, update=True)
+
+        self.add_hook(TrainEvent.EPOCH_TRAIN_END,
+                      lambda data: Log.i(
+                          "[train] epoch {} - "
+                          "#samples: {}, loss: {}"
+                          .format(data['epoch'],
+                                  data['size'],
+                                  data['loss'])))
+        if do_validation:
+            self.add_hook(TrainEvent.EPOCH_VALIDATION_END,
                           lambda data: Log.i(
-                              "[train] epoch {} - "
+                              "[validation] epoch {} - "
                               "#samples: {}, loss: {}"
                               .format(data['epoch'],
                                       data['size'],
                                       data['loss'])))
-            if do_validation:
-                self.add_hook(Event.EPOCH_VALIDATION_BEGIN,
-                              lambda data: pbar.start(data['size']))
-                self.add_hook(Event.EPOCH_VALIDATION_END,
-                              lambda data: pbar.finish())
-                self.add_hook(Event.EPOCH_VALIDATION_END,
-                              lambda data: Log.i(
-                                  "[validation] epoch {} - "
-                                  "#samples: {}, loss: {}"
-                                  .format(data['epoch'],
-                                          data['size'],
-                                          data['loss'])))
-
-        self.notify(Event.TRAIN_BEGIN)
 
         forward = (self._model if callable(self._model)
                    else self._model.forward())
         lossfun = self._loss_func
+
+        self.notify(TrainEvent.TRAIN_BEGIN)
 
         for epoch in range(1, epochs + 1):
             epoch_logs = {
@@ -173,7 +173,7 @@ class Trainer(Observable):
                 'size': train_dataset.size,
             }
             epoch_logs['loss'] = []
-            self.notify(Event.EPOCH_BEGIN, epoch_logs)
+            self.notify(TrainEvent.EPOCH_BEGIN, epoch_logs)
 
             self._process(forward, train_dataset, lossfun,
                           batch_size, epoch_logs)
@@ -181,9 +181,9 @@ class Trainer(Observable):
                 self._process(forward, val_dataset, lossfun,
                               batch_size, epoch_logs, train=False)
 
-            self.notify(Event.EPOCH_END, epoch_logs)
+            self.notify(TrainEvent.EPOCH_END, epoch_logs)
 
-        self.notify(Event.TRAIN_END)
+        self.notify(TrainEvent.TRAIN_END)
 
         # return history
 
@@ -198,8 +198,8 @@ class Trainer(Observable):
         num_batches = math.ceil(logs['size'] / batch_size)
         logs['num_batches'] = num_batches
         logs['loss'] = None
-        self.notify(Event.EPOCH_TRAIN_BEGIN
-                    if train else Event.EPOCH_VALIDATION_BEGIN, logs)
+        self.notify(TrainEvent.EPOCH_TRAIN_BEGIN
+                    if train else TrainEvent.EPOCH_VALIDATION_BEGIN, logs)
         logs['loss'] = 0.0
         for batch_index, batch in enumerate(
                 dataset.batch(batch_size, colwise=True, shuffle=train)):
@@ -216,7 +216,7 @@ class Trainer(Observable):
                 'ys': None,
                 'loss': None,
             }
-            self.notify(Event.BATCH_BEGIN, batch_logs)
+            self.notify(TrainEvent.BATCH_BEGIN, batch_logs)
 
             ys = forward(xs)
             loss = lossfun(ys, ts)
@@ -227,9 +227,9 @@ class Trainer(Observable):
 
             if train:
                 self._update(self._optimizer, loss)
-            self.notify(Event.BATCH_END, batch_logs)
+            self.notify(TrainEvent.BATCH_END, batch_logs)
             del loss
 
         logs['loss'] /= num_batches
-        self.notify(Event.EPOCH_TRAIN_END
-                    if train else Event.EPOCH_VALIDATION_END, logs)
+        self.notify(TrainEvent.EPOCH_TRAIN_END
+                    if train else TrainEvent.EPOCH_VALIDATION_END, logs)

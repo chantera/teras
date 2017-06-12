@@ -12,27 +12,6 @@ class Singleton(metaclass=ABCMeta):
         return cls.__instance
 
 
-class Observable(object):
-
-    def __init__(self):
-        self._hooks = {}
-
-    def add_hook(self, event, hook):
-        if event not in self._hooks:
-            self._hooks[event] = [hook]
-        elif hook not in self._hooks[event]:
-            self._hooks[event].append(hook)
-
-    def notify(self, event, data=None):
-        if event in self._hooks:
-            for hook in self._hooks[event]:
-                hook(data)
-
-    def remove_hook(self, event, hook):
-        if event in self._hooks and hook in self._hooks[event]:
-            self._hooks[event].remove(hook)
-
-
 class Context(dict, Callable):
 
     def __call__(self, key, default=None):

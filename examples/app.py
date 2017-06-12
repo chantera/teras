@@ -8,7 +8,7 @@ import chainer.functions as F
 from progressbar import ProgressBar
 
 from teras.app import App, arg
-from teras.app.trainer import Event, Trainer
+from teras.app.trainer import TrainEvent as Event, Trainer
 from teras.dataset import Dataset
 from teras.framework.chainer.model import MLP
 import teras.logging as Log
