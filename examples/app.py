@@ -5,10 +5,10 @@ import chainer
 import chainer.functions as F
 
 from teras.app import App, arg
-from teras.app.trainer import Trainer
 from teras.framework.chainer import config as chainer_config
 from teras.framework.chainer.model import MLP
 import teras.logging as Log
+from teras.training import Trainer
 
 
 def train(n_epoch=20,
@@ -80,8 +80,7 @@ App.add_command('train', train, {
 
 App.add_command('decode', decode, {})
 
-App.configure(loglevel=Log.DISABLE)
-
 
 if __name__ == "__main__":
+    App.configure(loglevel=Log.DISABLE)
     App.run()

@@ -1,6 +1,6 @@
 import chainer
 
-from ...app.trainer import TrainEvent
+from ...training.trainer import TrainEvent
 from . import model
 
 __all__ = ['model', 'config']
