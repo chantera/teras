@@ -20,23 +20,29 @@ class Dataset(Sequence):
                 self._n_cols = self._samples.shape[0]
             else:
                 self._samples = list(samples[0])
-                if len(self._samples) > 0 and \
-                        (type(self._samples[0]) is tuple or type(self._samples[0]) is list):
-                    self._n_cols = len(self._samples[0])
-                    self._dtype = type(self._samples[0])
+                first_sample = self._samples[0]
+                if (len(self._samples) > 0
+                        and (type(first_sample) is tuple
+                             or type(first_sample) is list)):
+                    self._n_cols = len(first_sample)
+                    self._dtype = (np.ndarray
+                                   if type(first_sample[0]) is np.ndarray
+                                   else type(first_sample))
         elif self._n_cols > 1:
             self._dtype = type(samples[0])
             if self._dtype is np.ndarray:
                 self._samples = [_samples for _samples in zip(*samples)]
             else:
-                self._samples = [self._dtype(_samples) for _samples in zip(*samples)]
+                self._samples \
+                    = [self._dtype(_samples) for _samples in zip(*samples)]
         self._len = len(self._samples)
         self._indexes = np.arange(self._len)
 
     def batch(self, size, shuffle=False, colwise=False):
         if shuffle:
             np.random.shuffle(self._indexes)
-        return _DatasetBatchIterator(Dataset(self.take(self._indexes)), size, colwise)
+        return _DatasetBatchIterator(
+            Dataset(self.take(self._indexes)), size, colwise)
 
     def __len__(self):
         return self._len
@@ -92,9 +98,10 @@ class _DatasetBatchIterator(Iterator):
 
     def __iter__(self):
         dataset = self._dataset
+        container_type = type(dataset._samples)
         dtype = dataset.dtype
         if self._colwise:
-            if dtype is np.ndarray:
+            if container_type is np.ndarray:
                 def _take(dataset, offset, batch_size):
                     return dataset.cols()[:, offset:offset + batch_size]
             elif dataset.n_cols == 1:
@@ -102,7 +109,9 @@ class _DatasetBatchIterator(Iterator):
                     return dataset[offset:offset + batch_size],
             else:
                 def _take(dataset, offset, batch_size):
-                    return tuple(dtype(col) for col in zip(*dataset._samples[offset:offset + batch_size]))
+                    _type = np.array if dtype is np.ndarray else dtype
+                    return tuple(_type(col) for col in zip(
+                        *dataset._samples[offset:offset + batch_size]))
         else:
             def _take(dataset, offset, batch_size):
                 return dataset[offset:offset + batch_size]
