@@ -56,6 +56,16 @@ class Trainer(EventSender):
             optimizer.update()
         self._update = update
 
+    def configure(self, config):
+        if 'update' in config:
+            self._config = config['update']
+        if 'hooks' in config:
+            for event, hook in config['hooks'].items():
+                self.add_hook(event, hook)
+        if 'callbacks' in config:
+            for callback in config['callbacks']:
+                self.add_callback(callback)
+
     def fit(self,
             x,
             y,
@@ -133,6 +143,7 @@ class Trainer(EventSender):
                               .format(data['epoch'],
                                       data['size'],
                                       data['loss'])))
+        self.add_hook(TrainEvent.EPOCH_END, lambda data: Log.v('-'))
 
     def _process(self,
                  forward,
