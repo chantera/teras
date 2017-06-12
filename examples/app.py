@@ -16,8 +16,7 @@ def train(n_epoch=20,
           n_layers=3,
           n_units=1000,
           dropout=0.2,
-          gpu=-1,
-          debug=False):
+          gpu=-1):
 
     train, test = chainer.datasets.get_mnist()
     train_x, train_y = train._datasets
@@ -53,6 +52,7 @@ def train(n_epoch=20,
     trainer.configure(chainer_config)
     trainer.fit(train_x, train_y,
                 batch_size=batch_size,
+                epochs=n_epoch,
                 validation_data=(test_x, test_y))
 
 
@@ -80,7 +80,6 @@ App.add_command('train', train, {
 
 App.add_command('decode', decode, {})
 
-App.add_arg('debug', True)
 App.configure(loglevel=Log.DISABLE)
 
 
