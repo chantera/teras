@@ -7,7 +7,8 @@ class Singleton(metaclass=ABCMeta):
 
     def __new__(cls, *args, **kwargs):
         if cls.__instance is None:
-            cls.__instance = super(Singleton, cls).__new__(cls, *args, **kwargs)
+            cls.__instance = \
+                super(Singleton, cls).__new__(cls, *args, **kwargs)
         return cls.__instance
 
 
@@ -16,9 +17,9 @@ class Observable(object):
     def __init__(self):
         self._hooks = {}
 
-    def addHook(self, event, hook):
+    def add_hook(self, event, hook):
         if event not in self._hooks:
-            self._hooks = [hook]
+            self._hooks[event] = [hook]
         elif hook not in self._hooks[event]:
             self._hooks[event].append(hook)
 
@@ -27,7 +28,7 @@ class Observable(object):
             for hook in self._hooks[event]:
                 hook(data)
 
-    def removeHook(self, event, hook):
+    def remove_hook(self, event, hook):
         if event in self._hooks and hook in self._hooks[event]:
             self._hooks[event].remove(hook)
 

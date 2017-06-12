@@ -8,6 +8,7 @@ import chainer.functions as F
 from progressbar import ProgressBar
 
 from teras.app import App, arg
+from teras.app.trainer import Event, Trainer
 from teras.dataset import Dataset
 from teras.framework.chainer.model import MLP
 import teras.logging as Log
@@ -160,11 +161,77 @@ def train(n_epoch=20,
         Log.v('-')
 
 
+def train2(n_epoch=20,
+           batch_size=100,
+           n_layers=3,
+           n_units=1000,
+           dropout=0.2,
+           gpu=-1,
+           debug=False):
+
+    # load dataset
+    train, test = chainer.datasets.get_mnist()
+    train_x, train_y = train._datasets
+    test_x, test_y = test._datasets
+    # train_dataset = Dataset(train_x, train_y)
+    # test_dataset = Dataset(test_x, test_y)
+
+    Log.v('')
+    Log.v("initialize ...")
+    Log.v('--------------------------------')
+    Log.i('# Minibatch-size: {}'.format(batch_size))
+    Log.i('# epoch: {}'.format(n_epoch))
+    Log.i('# gpu: {}'.format(gpu))
+    Log.i('# model: {}'.format(MLP))
+    Log.i('# layer: {}'.format(n_layers))
+    Log.i('# unit: {}'.format(n_units))
+    Log.i('# dropout: {}'.format(dropout))
+    Log.v('--------------------------------')
+    Log.v('')
+
+    assert n_layers >= 1
+    layers = [MLP.Layer(None, n_units, F.relu, dropout)
+              for i in range(n_layers - 1)]
+    layers.append(MLP.Layer(None, 10))
+    model = MLP(layers)
+    if gpu >= 0:
+        chainer.cuda.get_device_from_id(gpu).use()
+        model.to_gpu()
+    chainer.config.use_cudnn = 'auto'
+    if debug:
+        chainer.config.debug = True
+        chainer.config.type_check = True
+    else:
+        chainer.config.debug = False
+        chainer.config.type_check = False
+
+    def chainer_train_on(*args, **kwargs):
+        chainer.config.train = True
+        chainer.config.enable_backprop = True
+
+    def chainer_train_off(*args, **kwargs):
+        chainer.config.train = False
+        chainer.config.enable_backprop = False
+
+    optimizer = chainer.optimizers.Adam(
+        alpha=0.001, beta1=0.9, beta2=0.999, eps=1e-08)
+    optimizer.setup(model)
+    Log.i('optimizer: Adam(alpha=0.001, beta1=0.9, beta2=0.999, eps=1e-08)')
+
+    trainer = Trainer(optimizer, model, loss_func=F.softmax_cross_entropy)
+    trainer.add_hook(Event.EPOCH_TRAIN_BEGIN, chainer_train_on)
+    trainer.add_hook(Event.EPOCH_VALIDATION_BEGIN, chainer_train_off)
+    trainer.add_hook(Event.EPOCH_END, lambda x: Log.v('-'))
+    trainer.fit(train_x, train_y,
+                batch_size=batch_size,
+                validation_data=(test_x, test_y))
+
+
 def decode():
     pass
 
 
-App.add_command('train', train, {
+App.add_command('train', train2, {
     'batch_size':
     arg('--batchsize', '-b', type=int, default=100,
         help='Number of examples in each mini-batch'),
