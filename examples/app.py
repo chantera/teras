@@ -52,7 +52,7 @@ import teras.logging as Log
 
 def train(n_epoch=20,
           batch_size=100,
-          n_units=512,
+          n_units=1000,
           dropout=0.2,
           gpu=-1,
           debug=False):
@@ -72,6 +72,7 @@ def train(n_epoch=20,
     Log.i('# gpu: {}'.format(gpu))
     Log.i('# model: {}'.format(MLP))
     Log.i('# unit: {}'.format(n_units))
+    Log.i('# dropout: {}'.format(dropout))
     Log.v('--------------------------------')
     Log.v('')
 
@@ -121,9 +122,10 @@ def train(n_epoch=20,
             loss += batch_loss.data
             accuracy += batch_accuracy.data
             # update
-            optimizer.target.zerograds()
+            optimizer.target.cleargrads()
             batch_loss.backward()
             optimizer.update()
+            del batch_loss
         p.finish()
         Log.i("[training] epoch %d - #samples: %d, loss: %f, accuracy: %f" %
               (epoch + 1, size, loss / batch_count, accuracy / batch_count))
@@ -161,11 +163,19 @@ def decode():
 
 
 App.add_command('train', train, {
-    'batch_size': arg('--batchsize', '-b', type=int, default=100,
-                      help='Number of examples in each mini-batch'),
-    'n_epoch': arg('--epoch', '-e', type=int, default=20,
-                 help='Number of sweeps over the dataset to train'),
-    'gpu': arg('--gpu', '-g', type=int, default=-1),
+    'batch_size':
+    arg('--batchsize', '-b', type=int, default=100,
+        help='Number of examples in each mini-batch'),
+    'gpu':
+    arg('--gpu', '-g', type=int, default=-1),
+    'dropout':
+    arg('--dropout', '-dr', type=float, default=0.2,
+        help='dropout ratio'),
+    'n_epoch':
+    arg('--epoch', '-e', type=int, default=20,
+        help='Number of sweeps over the dataset to train'),
+    'n_units':
+    arg('--unit', '-u', type=int, default=1000, help='Number of units')
 }, description="execute train")
 
 App.add_command('decode', decode, {})
