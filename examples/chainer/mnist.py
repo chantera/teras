@@ -9,7 +9,6 @@ from teras.framework.chainer import config as chainer_config
 from teras.framework.chainer.model import MLP
 import teras.logging as Log
 from teras.training import Trainer
-from teras.training.trainer import Reporter
 
 
 def train(n_epoch=20,
@@ -49,8 +48,8 @@ def train(n_epoch=20,
     optimizer.setup(model)
     Log.i('optimizer: Adam(alpha=0.001, beta1=0.9, beta2=0.999, eps=1e-08)')
 
-    trainer = Trainer(optimizer, model, loss_func=F.softmax_cross_entropy)
-    trainer.attach_callback(Reporter(F.softmax_cross_entropy))
+    trainer = Trainer(optimizer, model, loss_func=F.softmax_cross_entropy,
+                      accuracy_func=F.accuracy)
     trainer.configure(chainer_config)
     trainer.fit(train_x, train_y,
                 batch_size=batch_size,

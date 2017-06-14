@@ -66,7 +66,7 @@ class Reporter(Callback):
             'accuracy': self._logs['accuracy'] / data['num_batches'],
             'loss': data['loss']
         }
-        Log.i("accuracy: {}".format(metrics['accuracy']))
+        Log.i("[training] accuracy: {}".format(metrics['accuracy']))
         self._history.append({'training': metrics, 'validation': None})
 
     def on_epoch_validate_end(self, data):
@@ -74,18 +74,19 @@ class Reporter(Callback):
             'accuracy': self._logs['accuracy'] / data['num_batches'],
             'loss': data['loss']
         }
-        Log.i("accuracy: {}".format(metrics['accuracy']))
+        Log.i("[validation] accuracy: {}".format(metrics['accuracy']))
         self._history[-1]['validation'] = metrics
 
 
 class Trainer(EventSender):
     EventClass = TrainEvent
 
-    def __init__(self, optimizer, model, loss_func):
+    def __init__(self, optimizer, model, loss_func, accuracy_func=None):
         super(Trainer, self).__init__()
         self._optimizer = optimizer
         self._model = model
         self._loss_func = loss_func
+        self._acc_func = accuracy_func
         self._initialize()
 
     def _initialize(self):
@@ -170,7 +171,7 @@ class Trainer(EventSender):
 
         self.add_hook(TrainEvent.EPOCH_TRAIN_END,
                       lambda data: Log.i(
-                          "[train] epoch {} - "
+                          "[training] epoch {} - "
                           "#samples: {}, loss: {}"
                           .format(data['epoch'],
                                   data['size'],
@@ -183,6 +184,9 @@ class Trainer(EventSender):
                               .format(data['epoch'],
                                       data['size'],
                                       data['loss'])))
+
+        if self._acc_func is not None:
+            self.attach_callback(Reporter(self._acc_func))
         self.add_hook(TrainEvent.EPOCH_END, lambda data: Log.v('-'))
 
     def _process(self,
