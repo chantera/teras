@@ -140,45 +140,6 @@ class App(AppBase):
         return cls._argparser.parse(command=command,
                                     section_prefix=cls.app_name)
 
-    """
-    @classmethod
-    def _parse_args(cls, command=None):
-        parser = argparse.ArgumentParser(add_help=False)
-        parser.add_argument('--config',
-                            type=str,
-                            default=cls.DEFAULT_CONFIG_FILE,
-                            help='configuration file',
-                            metavar='FILE')
-        args, _ = parser.parse_known_args(cls._args.sys_argv[1:])
-        config_file = args.config
-        if (config_file != cls.DEFAULT_CONFIG_FILE
-                and not os.path.exists(config_file)):
-            raise FileNotFoundError("config file was not found: "
-                                    "'%s'" % config_file)
-
-        commands = list(cls._commands.keys())
-        commands.append('common')
-        config = _read_config(cls.DEFAULT_CONFIG_FILE,
-                              commands, prefix=cls.app_name)
-        for group in config.keys():
-            _group = None if group == 'common' else group
-            for name, value in config[group].items():
-                cls._args.set_default(name, value, _group)
-
-        return _parse_args(cls._args, command, parser=parser)
-        #
-        #
-        # command, command_args, common_args \
-        #     = super(cls, App)._parse_args(command)
-        # # commands = list(cls._commands.keys())
-        # # commands.append('common')
-        # # config = _read_config(cls.DEFAULT_CONFIG_FILE,
-        # #                       commands, prefix=cls.app_name)
-        # # common_args.update(config['common'])
-        # # command_args.update(config[command])
-        # return command, command_args, common_args
-    """
-
     def _preprocess(self):
         uname = os.uname()
         verbose = not(self._config['quiet'])

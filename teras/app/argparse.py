@@ -181,11 +181,14 @@ class ArgParser(object):
 
 
 class ConfigArgParser(ArgParser):
+    _DEBUG = False
 
     def __init__(self, default_config_file):
         super(ConfigArgParser, self).__init__()
         self._default_config_file = default_config_file
         self._cmd_args_map = {}
+        self._config = None
+        self._source = None
 
     def add_arg(self, name, value, group=None):
         if type(value) is CmdlineArg:
@@ -205,16 +208,17 @@ class ConfigArgParser(ArgParser):
                                 help='configuration file',
                                 metavar='FILE')
             namespace, args = parser.parse_known_args(args)
-            config_file = namespace.config
-            if (config_file != self._default_config_file
-                    and not os.path.exists(config_file)):
+            config_file = os.path.expanduser(namespace.config)
+
+            if os.path.exists(config_file):
+                groups = list(self._def.groups)
+                groups.append('common')
+                self._config = self._read_config(config_file, groups,
+                                                 section_prefix)
+                self._source = config_file
+            elif config_file != self._default_config_file:
                 raise FileNotFoundError("config file was not found: "
                                         "'%s'" % config_file)
-
-            groups = list(self._def.groups)
-            groups.append('common')
-            config = self._read_config(config_file, groups, section_prefix)
-            print(config)
 
             parent_parser = parser
             parser = self._init_parser(
@@ -231,6 +235,8 @@ class ConfigArgParser(ArgParser):
         config = {}
         parser = ConfigParser()
         parser.read(os.path.expanduser(file))
+        if ConfigArgParser._DEBUG:
+            print("config file loaded: {}".format(file), file=sys.stderr)
 
         for section in sections:
             config[section] = self._read_config_section(
@@ -279,3 +285,11 @@ class ConfigArgParser(ArgParser):
         elif re.match(r"^\d+\.\d+$", value):
             value = float(value)
         return value
+
+    @property
+    def config(self):
+        return self._config
+
+    @property
+    def source(self):
+        return self._source
