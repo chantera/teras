@@ -1,5 +1,5 @@
 # from abc import abstractmethod
-from argparse import ArgumentParser
+import argparse
 from configparser import ConfigParser
 import os
 import re
@@ -15,8 +15,15 @@ class _Args(object):
     class CmdlineArg(object):
 
         def __init__(self, *args, **kwargs):
+            assert len(args) > 0
+            name = sorted(args, key=len, reverse=True)[0]
+            self._name = name.lstrip('-')
             self._args = args
             self._kwargs = kwargs
+
+        @property
+        def name(self):
+            return self._name
 
         @property
         def args(self):
@@ -64,6 +71,20 @@ class _Args(object):
             self._group_const_args[group] = {}
             self._group_descriptions[group] = description
 
+    def set_default(self, name, value, group=None):
+        if group is None:
+            if name in self._common_cmd_args:
+                self._common_cmd_args[name].add_kwarg('default', value)
+            if name in self._common_const_args:
+                self._common_const_args[name] = value
+        elif group in self._groups:
+            print(name, value, group)
+            print(self._group_cmd_args[group])
+            if name in self._group_cmd_args[group]:
+                self._group_cmd_args[group][name].add_kwarg('default', value)
+            if name in self._group_const_args[group]:
+                self._group_const_args[group][name] = value
+
     @property
     def sys_argv(self):
         return self._sys_argv
@@ -97,12 +118,15 @@ def arg(*args, **kwargs):
     return _Args.CmdlineArg(*args, **kwargs)
 
 
-def _init_parser(args):
+def _init_parser(args, **kwargs):
     num_cmds = len(args.groups)
     if num_cmds == 0:
         raise RuntimeError("At least one command should be defined.")
 
-    parser = ArgumentParser()
+    formatter_class = argparse.HelpFormatter
+    if 'formatter_class' in kwargs:
+        formatter_class = kwargs['formatter_class']
+    parser = argparse.ArgumentParser(**kwargs)
 
     for name, value in args.common_cmd_args.items():
         parser.add_argument(*value.args, **value.kwargs)
@@ -119,18 +143,29 @@ def _init_parser(args):
         subparsers.required = True
         for group in args.groups:
             subparser = subparsers.add_parser(
-                group, help=args.group_descriptions[group])
+                group, help=args.group_descriptions[group],
+                formatter_class=formatter_class)
             for name, value in args.group_cmd_args[group].items():
                 subparser.add_argument(*value.args, **value.kwargs)
 
     return parser
 
 
-def _parse_args(def_args, command=None):
-    parser = _init_parser(def_args)
+def _parse_args(def_args, command=None, parser=None):
+    if parser is not None:
+        parent_parser = parser
+        parser = _init_parser(
+            def_args, parents=[parent_parser],
+            formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+        _, _args = parent_parser.parse_known_args(def_args.sys_argv[1:])
+    else:
+        parser = _init_parser(
+            def_args,
+            formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+        _args = def_args.sys_argv[1:]
+
     grouped = len(def_args.groups) > 1
 
-    _args = def_args.sys_argv[1:]
     if command is not None:
         if command not in def_args.groups:
             raise ValueError("Undefined command is specified.")
@@ -209,7 +244,7 @@ class AppBase(Singleton):
 
     @classmethod
     def _parse_args(cls, command=None):
-        return _parse_args(AppBase._args, command)
+        return _parse_args(cls._args, command)
 
     @classmethod
     def run(cls, command=None):
@@ -311,15 +346,40 @@ class App(AppBase):
 
     @classmethod
     def _parse_args(cls, command=None):
-        command, command_args, common_args \
-            = super(cls, App)._parse_args(command)
+        parser = argparse.ArgumentParser(add_help=False)
+        parser.add_argument('--config',
+                            type=str,
+                            default=cls.DEFAULT_CONFIG_FILE,
+                            help='configuration file',
+                            metavar='FILE')
+        args, _ = parser.parse_known_args(cls._args.sys_argv[1:])
+        config_file = args.config
+        if (config_file != cls.DEFAULT_CONFIG_FILE
+                and not os.path.exists(config_file)):
+            raise FileNotFoundError("config file was not found: "
+                                    "'%s'" % config_file)
+
         commands = list(cls._commands.keys())
         commands.append('common')
         config = _read_config(cls.DEFAULT_CONFIG_FILE,
                               commands, prefix=cls.app_name)
-        common_args.update(config['common'])
-        command_args.update(config[command])
-        return command, command_args, common_args
+        for group in config.keys():
+            _group = None if group == 'common' else group
+            for name, value in config[group].items():
+                cls._args.set_default(name, value, _group)
+
+        return _parse_args(cls._args, command, parser=parser)
+        #
+        #
+        # command, command_args, common_args \
+        #     = super(cls, App)._parse_args(command)
+        # # commands = list(cls._commands.keys())
+        # # commands.append('common')
+        # # config = _read_config(cls.DEFAULT_CONFIG_FILE,
+        # #                       commands, prefix=cls.app_name)
+        # # common_args.update(config['common'])
+        # # command_args.update(config[command])
+        # return command, command_args, common_args
 
     def _preprocess(self):
         uname = os.uname()
