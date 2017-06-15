@@ -1,4 +1,4 @@
-# from abc import abstractmethod
+from configparser import ParsingError
 import os
 import signal
 import sys
@@ -137,8 +137,12 @@ class App(AppBase):
 
     @classmethod
     def _parse_args(cls, command=None):
-        return cls._argparser.parse(command=command,
-                                    section_prefix=cls.app_name)
+        try:
+            return cls._argparser.parse(command=command,
+                                        section_prefix=cls.app_name)
+        except (FileNotFoundError, ParsingError) as e:
+            print(e, file=sys.stderr)
+            sys.exit(0)
 
     def _preprocess(self):
         uname = os.uname()
