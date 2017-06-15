@@ -260,6 +260,10 @@ class App(AppBase):
                                   type=str,
                                   default=default_logdir,
                                   help='Log directory'))
+        cls.add_arg('logoption', arg('--logoption',
+                                     type=str,
+                                     default='a',
+                                     help='Log option: {a,d,h,n,w}'))
         cls.add_arg('loglevel', loglevel)
         cls.add_arg('script_name', script_name)
         cls.add_arg('quiet', arg('--quiet',
@@ -270,7 +274,9 @@ class App(AppBase):
         cls._configured = True
 
     def _preprocess(self):
+        uname = os.uname()
         verbose = not(self._config['quiet'])
+
         if self._config['debug']:
             if (self._config['loglevel'] < logging.DISABLE
                     and self._config['loglevel'] > logging.DEBUG):
@@ -281,6 +287,20 @@ class App(AppBase):
             'level': self._config['loglevel'],
             'verbosity': logging.TRACE if verbose else logging.DISABLE
         }
+        for char in self._config['logoption']:
+            if char == 'a':
+                logger_config['filemode'] = 'a'
+            elif char == 'd':
+                logger_config['filelog'] = False
+            elif char == 'h':
+                logger_config['filesuffix'] = '-' + uname[1]
+            elif char == 'n':
+                logger_config['filemode'] = 'n'
+            elif char == 'w':
+                logger_config['filemode'] = 'w'
+            else:
+                raise ValueError("Invalid logoption specified: {}"
+                                 .format(char))
         logging.AppLogger.configure(**logger_config)
         logger = logging.AppLogger(logger_name)
         logging.setRootLogger(logger)
