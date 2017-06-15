@@ -142,8 +142,12 @@ class AppLogger(Logger):
     _config = {
         'level': INFO,
         'verbosity': TRACE,
+        'filelog': True,
         'logdir': None,
         'filename': "%Y%m%d.log",
+        'filemode': 'a',
+        'fileprefix': '',
+        'filesuffix': '',
         'fmt': FORMAT,
         'datefmt': DATE_FORMAT,
     }
@@ -162,22 +166,8 @@ class AppLogger(Logger):
         self._accesstime = now.strftime(config['datefmt'])
 
         if len(self.handlers) == 0:
-            logdir = config['logdir']
-            if logdir:
-                logdir = os.path.abspath(os.path.expanduser(logdir))
-                if not os.path.isdir(logdir):
-                    raise FileNotFoundError("logdir was not found: "
-                                            "'%s'" % logdir)
-                logdir += '/'
-            else:
-                logdir = ''
-            logfile = logdir + datetime.now().strftime(config['filename'])
-
-            file_handler = logging.FileHandler(logfile, mode='a')
-            file_handler.setLevel(config['level'])
-            file_handler.setFormatter(
-                Formatter(config['fmt'], config['datefmt']))
-            self.addHandler(file_handler)
+            if config['filelog']:
+                self._add_file_handler(config)
 
             stream_handler = logging.StreamHandler()
             stream_handler.setLevel(config['verbosity'])
@@ -187,6 +177,56 @@ class AppLogger(Logger):
 
         message = "LOG Start with ACCESSID=[%s] UNIQUEID=[%s] ACCESSTIME=[%s]"
         self.info(message % (self._accessid, self._uniqueid, self._accesstime))
+
+    def _add_file_handler(self, config):
+        enable_numbering = False
+        filemode = 'a'
+        if config['filemode'] == '' or config['filemode'] == 'a':
+            filemode = 'a'
+        elif config['filemode'] == 'w':
+            filemode = 'w'
+        elif config['filemode'] == 'n':
+            filemode = 'w'
+            enable_numbering = True
+        else:
+            raise ValueError("Invalid filemode specified: {}"
+                             .format(config['filemode']))
+
+        logdir = config['logdir']
+        if logdir:
+            logdir = os.path.abspath(os.path.expanduser(logdir))
+            if not os.path.isdir(logdir):
+                raise FileNotFoundError("logdir was not found: "
+                                        "'%s'" % logdir)
+            logdir += '/'
+        else:
+            logdir = ''
+
+        if '/' in config['filename']:
+            raise ValueError("Invalid character '/' is included: {}"
+                             .format(config['filename']))
+
+        basename, ext = os.path.splitext(config['filename'])
+        basename = (config['fileprefix']
+                    + datetime.now().strftime(basename)
+                    + config['filesuffix'])
+
+        if enable_numbering:
+            number = 0
+            while True:
+                logfile = logdir + basename + '-' + str(number) + ext
+                if not os.path.exists(logfile):
+                    break
+                number += 1
+        else:
+            logfile = logdir + basename + ext
+
+        file_handler = logging.FileHandler(logfile, mode=filemode)
+        file_handler.setLevel(config['level'])
+        file_handler.setFormatter(
+            Formatter(config['fmt'], config['datefmt']))
+
+        self.addHandler(file_handler)
 
     def finalize(self):
         processtime = ('%3.9f' % (datetime.now(tzlocal())
