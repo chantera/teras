@@ -1,6 +1,8 @@
 # from abc import abstractmethod
 from argparse import ArgumentParser
+from configparser import ConfigParser
 import os
+import re
 import signal
 import sys
 
@@ -153,6 +155,31 @@ def _parse_args(def_args, command=None):
     return command, command_args, common_args
 
 
+def _read_config(file, sections, prefix=None):
+    if prefix is None:
+        prefix = ''
+
+    config = {}
+    parser = ConfigParser()
+    parser.read(os.path.expanduser(file))
+
+    for section in sections:
+        section_name = prefix + '.' + section
+        _config = {}
+        if section_name in parser:
+            for name, value in parser.items(section_name):
+                if re.match(r"^(?:true|false)$", value, re.IGNORECASE):
+                    value = parser[section_name].getboolean(name)
+                elif re.match(r"^\d+$", value):
+                    value = int(value)
+                elif re.match(r"^\d+\.\d+$", value):
+                    value = float(value)
+                _config[name] = value
+        config[section] = _config
+
+    return config
+
+
 class AppBase(Singleton):
     __instance = None
     _commands = {}
@@ -181,10 +208,14 @@ class AppBase(Singleton):
         pass
 
     @classmethod
+    def _parse_args(cls, command=None):
+        return _parse_args(AppBase._args, command)
+
+    @classmethod
     def run(cls, command=None):
         cls.configure()
         command, command_args, common_args \
-            = _parse_args(AppBase._args, command)
+            = cls._parse_args(command)
         try:
             def handler(signum, frame):
                 raise SystemExit("Signal(%d) received: "
@@ -241,11 +272,16 @@ class AppBase(Singleton):
 
 
 class App(AppBase):
+    DEFAULT_APP_NAME = "teras.app"
+    DEFAULT_CONFIG_FILE = "~/.teras.conf"
+    app_name = ''
 
     @classmethod
     def configure(cls, **kwargs):
         if hasattr(cls, '_configured') and cls._configured:
             return
+        cls.app_name = (kwargs['name'] if 'name' in kwargs
+                        else cls.DEFAULT_APP_NAME)
         script_name = cls._args.sys_argv[0]
         basedir = os.path.dirname(os.path.realpath(script_name))
         default_logdir = basedir + '/logs'
@@ -272,6 +308,18 @@ class App(AppBase):
                                  help='execute quietly: '
                                  'does not print any message'))
         cls._configured = True
+
+    @classmethod
+    def _parse_args(cls, command=None):
+        command, command_args, common_args \
+            = super(cls, App)._parse_args(command)
+        commands = list(cls._commands.keys())
+        commands.append('common')
+        config = _read_config(cls.DEFAULT_CONFIG_FILE,
+                              commands, prefix=cls.app_name)
+        common_args.update(config['common'])
+        command_args.update(config[command])
+        return command, command_args, common_args
 
     def _preprocess(self):
         uname = os.uname()
