@@ -64,19 +64,24 @@ def decode():
 App.add_command('train', train, {
     'batch_size':
     arg('--batchsize', '-b', type=int, default=100,
-        help='Number of examples in each mini-batch'),
+        help='Number of examples in each mini-batch',
+        metavar='SIZE'),
     'gpu':
-    arg('--gpu', '-g', type=int, default=-1),
+    arg('--gpu', '-g', type=int, default=-1,
+        help='use gpu device', metavar='DEVICE'),
     'dropout':
     arg('--dropout', '-dr', type=float, default=0.2,
-        help='dropout ratio'),
+        help='dropout ratio', metavar='RATIO'),
     'n_epoch':
     arg('--epoch', '-e', type=int, default=20,
-        help='Number of sweeps over the dataset to train'),
+        help='Number of sweeps over the dataset to train',
+        metavar='NUM'),
     'n_layers':
-    arg('--layer', '-l', type=int, default=3, help='Number of layers'),
+    arg('--layer', '-l', type=int, default=3,
+        help='Number of layers', metavar='NUM'),
     'n_units':
-    arg('--unit', '-u', type=int, default=1000, help='Number of units')
+    arg('--unit', '-u', type=int, default=1000,
+        help='Number of units', metavar='NUM')
 }, description="exec train")
 
 App.add_command('decode', decode, {})
