@@ -20,7 +20,7 @@ info:root:Hello World!
 
 ## Example
 
-```sh
+```python
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
