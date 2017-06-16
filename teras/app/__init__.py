@@ -116,23 +116,23 @@ class App(AppBase):
         cls.add_arg('basedir', basedir)
         cls.add_arg('debug', arg('--debug',
                                  action='store_true',
-                                 default=False,
+                                 default=kwargs.get('debug', False),
                                  help='Enable debug mode'))
         cls.add_arg('logdir', arg('--logdir',
                                   type=str,
-                                  default=default_logdir,
+                                  default=kwargs.get('logdir', default_logdir),
                                   help='Log directory',
                                   metavar='DIR'))
         cls.add_arg('logoption', arg('--logoption',
                                      type=str,
-                                     default='a',
+                                     default=kwargs.get('logoption', 'a'),
                                      help='Log option: {a,d,h,n,w}',
                                      metavar='VALUE'))
         cls.add_arg('loglevel', loglevel)
         cls.add_arg('script_name', script_name)
         cls.add_arg('quiet', arg('--quiet',
                                  action='store_true',
-                                 default=False,
+                                 default=kwargs.get('quiet', False),
                                  help='execute quietly: '
                                  'does not print any message'))
         cls._configured = True
