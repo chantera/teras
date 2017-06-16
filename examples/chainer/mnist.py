@@ -58,6 +58,7 @@ def train(n_epoch=20,
 
 
 def decode():
+    """define decode command"""
     pass
 
 
