@@ -172,7 +172,7 @@ class ArgParser(object):
             subparsers.required = True
             for group in _def.groups:
                 subparser = subparsers.add_parser(
-                    group, help=_def.group_descriptions[group],
+                    group, **_def.group_descriptions[group],
                     formatter_class=formatter_class)
                 for name, value in _def.grouped_cmd_args[group].items():
                     subparser.add_argument(*value.args, **value.kwargs)
