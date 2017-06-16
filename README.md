@@ -124,7 +124,7 @@ $ python mnist.py train --epoch 50
 
 License
 ----
-Apache License Version 2.0
+MIT License
 
 &copy; Copyright 2017 Teranishi Hiroki
 
