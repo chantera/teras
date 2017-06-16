@@ -88,5 +88,5 @@ App.add_command('decode', decode, {})
 
 
 if __name__ == "__main__":
-    App.configure(loglevel=Log.DISABLE)
+    App.configure(name='chainer-mnist', loglevel=Log.DISABLE)
     App.run()

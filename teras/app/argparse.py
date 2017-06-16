@@ -1,4 +1,5 @@
 import argparse
+from collections import OrderedDict
 from configparser import ConfigParser
 import os
 import re
@@ -200,32 +201,46 @@ class ConfigArgParser(ArgParser):
     def parse(self, args=None, parser=None, command=None, section_prefix=None):
         if args is None:
             args = sys.argv[1:]
-        if parser is None:
-            parser = argparse.ArgumentParser(add_help=False)
-            parser.add_argument('--config',
-                                type=str,
-                                default=self._default_config_file,
-                                help='configuration file',
-                                metavar='FILE')
-            namespace, args = parser.parse_known_args(args)
-            config_file = os.path.expanduser(namespace.config)
+        if parser is not None:
+            return super(ConfigArgParser, self).parse(args, parser, command)
 
-            if os.path.exists(config_file):
-                groups = list(self._def.groups)
-                groups.append('common')
-                self._config = self._read_config(config_file, groups,
-                                                 section_prefix)
-                self._source = config_file
-            elif config_file != self._default_config_file:
-                raise FileNotFoundError("config file was not found: "
-                                        "'%s'" % config_file)
+        parser = argparse.ArgumentParser(add_help=False)
+        parser.add_argument('--config',
+                            type=str,
+                            default=self._default_config_file,
+                            help='configuration file',
+                            metavar='FILE')
+        parser.add_argument('--saveconfig',
+                            type=str,
+                            help='save current configuration to file',
+                            metavar='FILE')
+        namespace, args = parser.parse_known_args(args)
+        config_file = os.path.expanduser(namespace.config)
 
-            parent_parser = parser
-            parser = self._init_parser(
-                parents=[parent_parser],
-                formatter_class=ConfigArgParser.DEFAULT_FORMATTER_CLASS)
+        if os.path.exists(config_file):
+            groups = list(self._def.groups)
+            groups.append('common')
+            self._config = self._read_config(config_file, groups,
+                                             section_prefix)
+            self._source = config_file
+        elif config_file != self._default_config_file:
+            raise FileNotFoundError("config file was not found: "
+                                    "'%s'" % config_file)
 
-        return super(ConfigArgParser, self).parse(args, parser, command)
+        parent_parser = parser
+        parser = self._init_parser(
+            parents=[parent_parser],
+            formatter_class=ConfigArgParser.DEFAULT_FORMATTER_CLASS)
+
+        command, command_args, common_args = \
+            super(ConfigArgParser, self).parse(args, parser, command)
+        if namespace.saveconfig is not None:
+            new_config_file = os.path.expanduser(namespace.saveconfig)
+            current_config = OrderedDict()
+            current_config['common'] = common_args
+            current_config[command] = command_args
+            self._write_config(new_config_file, current_config, section_prefix)
+        return command, command_args, common_args
 
     def _read_config(self, file, sections, prefix=None,
                      ignore_undefined_args=True):
@@ -272,14 +287,38 @@ class ConfigArgParser(ArgParser):
             _config[dist_name] = value
         return _config
 
+    def _write_config(self, file, config, prefix=None):
+        if prefix is None:
+            prefix = ''
+
+        parser = ConfigParser()
+        file = os.path.expanduser(file)
+        if ConfigArgParser._DEBUG or True:
+            print("write config to file: {}".format(file), file=sys.stderr)
+
+        for section, _config in config.items():
+            section_name = prefix + '.' + section
+            def_args = (self._def.common_cmd_args if section == 'common'
+                        else self._def.grouped_cmd_args[section])
+            new_config = {}
+            for name, value in _config.items():
+                if name in def_args:
+                    new_config[def_args[name].names[0]] = value
+            parser[section_name] = new_config
+
+        with open(file, 'w') as configfile:
+            parser.write(configfile)
+
     @staticmethod
     def _cast_value(value, def_arg):
         if 'type' in def_arg.kwargs:
-            value = def_arg.kwargs['type'](value)
+            _type = def_arg.kwargs['type']
+            value = _type(value) if _type is not bool else _getboolean(value)
         elif 'default' in def_arg.kwargs:
-            value = type(def_arg.kwargs['default'])(value)
+            _type = type(def_arg.kwargs['default'])
+            value = _type(value) if _type is not bool else _getboolean(value)
         elif re.match(r"^(?:true|false)$", value, re.IGNORECASE):
-            value = (value.lower() == 'true')
+            value = _getboolean(value)
         elif re.match(r"^\d+$", value):
             value = int(value)
         elif re.match(r"^\d+\.\d+$", value):
@@ -293,3 +332,11 @@ class ConfigArgParser(ArgParser):
     @property
     def source(self):
         return self._source
+
+
+_BOOLEAN_STATES = {'1': True, 'yes': True, 'true': True, 'on': True,
+                   '0': False, 'no': False, 'false': False, 'off': False}
+
+
+def _getboolean(value):
+    return _BOOLEAN_STATES[value.lower()]
