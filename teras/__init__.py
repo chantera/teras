@@ -9,7 +9,7 @@
 
 ================================================
 
-Copyright 2016 Hiroki Teranishi
+Copyright 2017 Hiroki Teranishi
 
 @author  Hiroki Teranishi
 @email   teranishihiroki@gmail.com
@@ -19,7 +19,7 @@ Copyright 2016 Hiroki Teranishi
 ------------------------------------------------------------------------------
 MIT License
 
-Copyright (c) 2016 Hiroki Teranishi
+Copyright (c) 2017 Hiroki Teranishi
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -42,8 +42,14 @@ SOFTWARE.
 
 """
 
+from . import app
 from . import base
-from . import chainer
-from . import tools
+from . import dataset
+from . import framework
+from . import logging
+from . import preprocessing
+from . import training
+from . import utils
 
-__all__ = ['base', 'chainer', 'tools']
+__all__ = ['app', 'base', 'dataset', 'framework', 'logging', 'preprocessing',
+           'training', 'utils']

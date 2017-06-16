@@ -48,8 +48,8 @@ class MLP(ChainList):
 
     class Layer(L.Linear):
 
-        def __init__(self, in_size, out_size=None, nobias=False,
-                     initialW=None, initial_bias=None, activation=None, dropout=0):
+        def __init__(self, in_size, out_size=None, activation=None, dropout=0.0,
+                     nobias=False, initialW=None, initial_bias=None):
             super(MLP.Layer, self).__init__(in_size, out_size, nobias, initialW, initial_bias)
             if activation is None:
                 self._activate = lambda x: x
