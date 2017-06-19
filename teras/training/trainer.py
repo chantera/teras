@@ -115,7 +115,7 @@ class Trainer(EventSender):
             self.attach_callback(callback, update=True)
 
         if self._acc_func is not None:
-            self.attach_callback(Reporter(self._acc_func))
+            self.attach_callback(Reporter(self._acc_func), priority=200)
         else:
             self.add_hook(TrainEvent.EPOCH_TRAIN_END,
                           lambda data: Log.i(
