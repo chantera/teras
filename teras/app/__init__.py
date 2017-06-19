@@ -12,6 +12,7 @@ class AppBase(Singleton):
     __instance = None
     _commands = {}
     _argparser = ArgParser()
+    debug = False
 
     def __init__(self):
         raise NotImplementedError()
@@ -58,7 +59,7 @@ class AppBase(Singleton):
             self._finalize()
         except Exception:
             logging.e("Exception occurred during execution:",
-                      exc_info=True, stack_info=True)
+                      exc_info=True, stack_info=cls.debug)
         except SystemExit as e:
             logging.w(e)
         finally:
@@ -156,8 +157,9 @@ class App(AppBase):
     def _preprocess(self):
         uname = os.uname()
         verbose = not(self._config['quiet'])
+        App.debug = self._config['debug']
 
-        if self._config['debug']:
+        if App.debug:
             if (self._config['loglevel'] < logging.DISABLE
                     and self._config['loglevel'] > logging.DEBUG):
                 self._config['loglevel'] = logging.DEBUG
