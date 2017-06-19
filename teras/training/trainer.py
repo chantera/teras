@@ -1,10 +1,10 @@
 import math
 
-from .. import logging as Log
-from ..base.event import EventSender
-from .callbacks import ProgressCallback, Reporter
-from ..dataset import Dataset
-from .event import TrainEvent
+from teras import logging as Log
+from teras.base.event import EventSender
+from teras.dataset import Dataset
+from teras.training.callbacks import ProgressCallback, Reporter
+from teras.training.event import TrainEvent
 
 
 class Trainer(EventSender):

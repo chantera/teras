@@ -1,4 +1,4 @@
-from ..base.event import Event
+from teras.base.event import Event
 
 
 class TrainEvent(Event):

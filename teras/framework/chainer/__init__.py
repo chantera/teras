@@ -1,7 +1,7 @@
 import chainer
 
-from ...training.trainer import TrainEvent
-from . import model
+from teras.framework.chainer import model
+from teras.training.trainer import TrainEvent
 
 __all__ = ['chainer_train_on', 'chainer_train_off', 'config',
            'model', 'set_debug', 'to_device']

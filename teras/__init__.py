@@ -42,14 +42,14 @@ SOFTWARE.
 
 """
 
-from . import app
-from . import base
-from . import dataset
-from . import framework
-from . import logging
-from . import preprocessing
-from . import training
-from . import utils
+from teras import app
+from teras import base
+from teras import dataset
+from teras import framework
+from teras import logging
+from teras import preprocessing
+from teras import training
+from teras import utils
 
 __all__ = ['app', 'base', 'dataset', 'framework', 'logging', 'preprocessing',
            'training', 'utils']

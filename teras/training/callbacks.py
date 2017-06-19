@@ -1,7 +1,7 @@
-from ..base.event import Callback
-from .event import TrainEvent
-from ..utils.progressbar import ProgressBar
-from .. import logging as Log
+from teras import logging as Log
+from teras.base.event import Callback
+from teras.training.event import TrainEvent
+from teras.utils.progressbar import ProgressBar
 
 
 class ProgressCallback(Callback):

@@ -3,9 +3,9 @@ import os
 import signal
 import sys
 
-from .argparse import arg, ArgParser, ConfigArgParser
-from ..base import Singleton
-from .. import logging, utils
+from teras import logging, utils
+from teras.app.argparse import arg, ArgParser, ConfigArgParser
+from teras.base import Singleton
 
 
 class AppBase(Singleton):
