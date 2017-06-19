@@ -5,7 +5,7 @@ import sys
 
 from .argparse import arg, ArgParser, ConfigArgParser
 from ..base import Singleton
-from .. import logging
+from .. import logging, utils
 
 
 class AppBase(Singleton):
@@ -109,17 +109,26 @@ class App(AppBase):
             return
         entry_script = sys.argv[0]
         basedir = os.path.dirname(os.path.realpath(entry_script))
+        entry_point = os.path.join(basedir, os.path.basename(entry_script))
+
         App.basedir = basedir
         App.entry_script = entry_script
-        App.entry_point = os.path.join(basedir, entry_script)
+        App.entry_point = entry_point
+
+        repo = utils.git.root(entry_point)
+        if repo is not None:
+            App.app_name = os.path.basename(repo) + entry_point[len(repo):]
+        else:
+            App.app_name = App.DEFAULT_APP_NAME
+
         App._static_initialized = True
 
     @classmethod
     def configure(cls, **kwargs):
         if hasattr(cls, '_configured') and cls._configured:
             return
-        cls.app_name = (kwargs['name'] if 'name' in kwargs
-                        else cls.DEFAULT_APP_NAME)
+        if 'name' in kwargs:
+            cls.app_name = kwargs['name']
         default_logdir = cls.basedir + '/logs'
         loglevel = (kwargs['loglevel']
                     if 'loglevel' in kwargs else logging.INFO)
@@ -132,12 +141,12 @@ class App(AppBase):
                                   default=kwargs.get('logdir', default_logdir),
                                   help='Log directory',
                                   metavar='DIR'))
+        cls.add_arg('loglevel', loglevel)
         cls.add_arg('logoption', arg('--logoption',
                                      type=str,
                                      default=kwargs.get('logoption', 'a'),
                                      help='Log option: {a,d,h,n,w}',
                                      metavar='VALUE'))
-        cls.add_arg('loglevel', loglevel)
         cls.add_arg('quiet', arg('--quiet',
                                  action='store_true',
                                  default=kwargs.get('quiet', False),
