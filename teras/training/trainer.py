@@ -66,7 +66,10 @@ class Reporter(Callback):
             'accuracy': self._logs['accuracy'] / data['num_batches'],
             'loss': float(data['loss'])
         }
-        Log.i("[training] accuracy: {:.8f}".format(metrics['accuracy']))
+        Log.i("[training] epoch {} - "
+              "#samples: {}, loss: {:.8f}, accuracy: {:.8f}"
+              .format(data['epoch'], data['size'],
+                      metrics['loss'], metrics['accuracy']))
         self._history.append({'training': metrics, 'validation': None})
 
     def on_epoch_validate_end(self, data):
@@ -74,7 +77,10 @@ class Reporter(Callback):
             'accuracy': self._logs['accuracy'] / data['num_batches'],
             'loss': float(data['loss'])
         }
-        Log.i("[validation] accuracy: {:.8f}".format(metrics['accuracy']))
+        Log.i("[validation] epoch {} - "
+              "#samples: {}, loss: {:.8f}, accuracy: {:.8f}"
+              .format(data['epoch'], data['size'],
+                      metrics['loss'], metrics['accuracy']))
         self._history[-1]['validation'] = metrics
 
 
@@ -185,24 +191,24 @@ class Trainer(EventSender):
                                    callback.finish_progressbar)
             self.attach_callback(callback, update=True)
 
-        self.add_hook(TrainEvent.EPOCH_TRAIN_END,
-                      lambda data: Log.i(
-                          "[training] epoch {} - "
-                          "#samples: {}, loss: {:.8f}"
-                          .format(data['epoch'],
-                                  data['size'],
-                                  float(data['loss']))))
-        if do_validation:
-            self.add_hook(TrainEvent.EPOCH_VALIDATE_END,
+        if self._acc_func is not None:
+            self.attach_callback(Reporter(self._acc_func))
+        else:
+            self.add_hook(TrainEvent.EPOCH_TRAIN_END,
                           lambda data: Log.i(
-                              "[validation] epoch {} - "
+                              "[training] epoch {} - "
                               "#samples: {}, loss: {:.8f}"
                               .format(data['epoch'],
                                       data['size'],
                                       float(data['loss']))))
-
-        if self._acc_func is not None:
-            self.attach_callback(Reporter(self._acc_func))
+            if do_validation:
+                self.add_hook(TrainEvent.EPOCH_VALIDATE_END,
+                              lambda data: Log.i(
+                                  "[validation] epoch {} - "
+                                  "#samples: {}, loss: {:.8f}"
+                                  .format(data['epoch'],
+                                          data['size'],
+                                          float(data['loss']))))
         self.add_hook(TrainEvent.EPOCH_END, lambda data: Log.v('-'))
 
     def _process(self,
