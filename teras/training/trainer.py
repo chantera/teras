@@ -59,22 +59,22 @@ class Reporter(Callback):
 
     def on_batch_end(self, data):
         accuracy = self._acc_func(data['ys'], data['ts'])
-        self._logs['accuracy'] += accuracy
+        self._logs['accuracy'] += float(accuracy)
 
     def on_epoch_train_end(self, data):
         metrics = {
             'accuracy': self._logs['accuracy'] / data['num_batches'],
-            'loss': data['loss']
+            'loss': float(data['loss'])
         }
-        Log.i("[training] accuracy: {}".format(metrics['accuracy']))
+        Log.i("[training] accuracy: {:.8f}".format(metrics['accuracy']))
         self._history.append({'training': metrics, 'validation': None})
 
     def on_epoch_validate_end(self, data):
         metrics = {
             'accuracy': self._logs['accuracy'] / data['num_batches'],
-            'loss': data['loss']
+            'loss': float(data['loss'])
         }
-        Log.i("[validation] accuracy: {}".format(metrics['accuracy']))
+        Log.i("[validation] accuracy: {:.8f}".format(metrics['accuracy']))
         self._history[-1]['validation'] = metrics
 
 
@@ -179,18 +179,18 @@ class Trainer(EventSender):
         self.add_hook(TrainEvent.EPOCH_TRAIN_END,
                       lambda data: Log.i(
                           "[training] epoch {} - "
-                          "#samples: {}, loss: {}"
+                          "#samples: {}, loss: {:.8f}"
                           .format(data['epoch'],
                                   data['size'],
-                                  data['loss'])))
+                                  float(data['loss']))))
         if do_validation:
             self.add_hook(TrainEvent.EPOCH_VALIDATE_END,
                           lambda data: Log.i(
                               "[validation] epoch {} - "
-                              "#samples: {}, loss: {}"
+                              "#samples: {}, loss: {:.8f}"
                               .format(data['epoch'],
                                       data['size'],
-                                      data['loss'])))
+                                      float(data['loss']))))
 
         if self._acc_func is not None:
             self.attach_callback(Reporter(self._acc_func))

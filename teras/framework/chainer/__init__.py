@@ -7,6 +7,11 @@ __all__ = ['chainer_train_on', 'chainer_train_off', 'config',
            'model', 'set_debug', 'to_device']
 
 
+# hack
+chainer.Variable.__int__ = lambda self: int(self.data)
+chainer.Variable.__float__ = lambda self: float(self.data)
+
+
 def to_device(x, device=None):
     return chainer.dataset.convert.to_device(device, x)
 
