@@ -96,16 +96,21 @@ class Trainer(EventSender):
             loss.backward()
             optimizer.update()
         self._update = update
+        self._converter = None
 
-    def configure(self, config):
+    def configure(self, config, **kwargs):
+        assert isinstance(config, dict)
+        config.update(kwargs)
         if 'update' in config:
-            self._config = config['update']
+            self._update = config['update']
         if 'hooks' in config:
             for event, hook in config['hooks'].items():
                 self.add_hook(event, hook)
         if 'callbacks' in config:
             for callback in config['callbacks']:
                 self.add_callback(callback)
+        if 'converter' in config:
+            self._converter = config['converter']
 
     def fit(self,
             x,
@@ -135,6 +140,8 @@ class Trainer(EventSender):
         forward = (self._model if callable(self._model)
                    else self._model.forward())
         lossfun = self._loss_func
+        convert = (self._converter if callable(self._converter)
+                   else lambda x: x)
 
         history = []
 
@@ -148,10 +155,10 @@ class Trainer(EventSender):
             self.notify(TrainEvent.EPOCH_BEGIN, epoch_logs)
 
             self._process(forward, train_dataset, lossfun,
-                          batch_size, epoch_logs)
+                          convert, batch_size, epoch_logs)
             if do_validation:
                 self._process(forward, val_dataset, lossfun,
-                              batch_size, epoch_logs, train=False)
+                              convert, batch_size, epoch_logs, train=False)
 
             self.notify(TrainEvent.EPOCH_END, epoch_logs)
 
@@ -193,6 +200,7 @@ class Trainer(EventSender):
                  forward,
                  dataset,
                  lossfun,
+                 convert,
                  batch_size,
                  logs={}, train=True):
         logs = logs.copy()
@@ -208,6 +216,7 @@ class Trainer(EventSender):
             xs, ts = batch[:-1], batch[-1]
             if len(xs) == 1:
                 xs = xs[0]
+            xs, ts = convert(xs), convert(ts)
 
             batch_logs = {
                 'train': train,

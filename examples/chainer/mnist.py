@@ -5,7 +5,7 @@ import chainer
 import chainer.functions as F
 
 from teras.app import App, arg
-from teras.framework.chainer import config as chainer_config
+from teras.framework.chainer import config as chainer_config, to_device
 from teras.framework.chainer.model import MLP
 import teras.logging as Log
 from teras.training import Trainer
@@ -41,6 +41,7 @@ def train(n_epoch=20,
     model = MLP(layers)
     if gpu >= 0:
         chainer.cuda.get_device_from_id(gpu).use()
+        chainer_config['converter'] = lambda x: to_device(x, gpu)
         model.to_gpu()
 
     optimizer = chainer.optimizers.Adam(

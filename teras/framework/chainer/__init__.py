@@ -3,7 +3,12 @@ import chainer
 from ...training.trainer import TrainEvent
 from . import model
 
-__all__ = ['model', 'config']
+__all__ = ['chainer_train_on', 'chainer_train_off', 'config',
+           'model', 'set_debug', 'to_device']
+
+
+def to_device(x, device=None):
+    return chainer.dataset.convert.to_device(device, x)
 
 
 def _update(optimizer, loss):
