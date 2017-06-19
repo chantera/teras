@@ -130,8 +130,12 @@ class App(AppBase):
         if 'name' in kwargs:
             cls.app_name = kwargs['name']
         default_logdir = cls.basedir + '/logs'
-        loglevel = (kwargs['loglevel']
-                    if 'loglevel' in kwargs else logging.INFO)
+        loglevel_choices = [logging.getLevelName(level) for level in
+                            [logging.FATAL,
+                             logging.WARN,
+                             logging.INFO,
+                             logging.DEBUG,
+                             logging.TRACE]]
         cls.add_arg('debug', arg('--debug',
                                  action='store_true',
                                  default=kwargs.get('debug', False),
@@ -141,7 +145,11 @@ class App(AppBase):
                                   default=kwargs.get('logdir', default_logdir),
                                   help='Log directory',
                                   metavar='DIR'))
-        cls.add_arg('loglevel', loglevel)
+        cls.add_arg('loglevel', arg('--loglevel',
+                                    type=str,
+                                    default=kwargs.get('loglevel', 'info'),
+                                    help='Log level',
+                                    choices=loglevel_choices))
         cls.add_arg('logoption', arg('--logoption',
                                      type=str,
                                      default=kwargs.get('logoption', 'a'),
@@ -168,14 +176,16 @@ class App(AppBase):
         verbose = not(self._config['quiet'])
         App.debug = self._config['debug']
 
+        loglevel = logging.logging._checkLevel(self._config['loglevel'])
         if App.debug:
-            if (self._config['loglevel'] < logging.DISABLE
-                    and self._config['loglevel'] > logging.DEBUG):
-                self._config['loglevel'] = logging.DEBUG
+            if (loglevel < logging.DISABLE
+                    and loglevel > logging.DEBUG):
+                loglevel = self._config['loglevel'] = logging.DEBUG
         logger_name = App.entry_script
         logger_config = {
             'logdir': self._config['logdir'],
-            'level': self._config['loglevel'],
+            'filemode': 'a',
+            'level': loglevel,
             'verbosity': logging.TRACE if verbose else logging.DISABLE
         }
         for char in self._config['logoption']:
