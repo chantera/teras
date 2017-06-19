@@ -102,18 +102,26 @@ class App(AppBase):
     app_name = ''
     _argparser = ConfigArgParser(DEFAULT_CONFIG_FILE)
 
+    @staticmethod
+    def _static_initialize():
+        if hasattr(App, '_static_initialized') and App._static_initialized:
+            return
+        entry_script = sys.argv[0]
+        basedir = os.path.dirname(os.path.realpath(entry_script))
+        App.basedir = basedir
+        App.entry_script = entry_script
+        App.entry_point = os.path.join(basedir, entry_script)
+        App._static_initialized = True
+
     @classmethod
     def configure(cls, **kwargs):
         if hasattr(cls, '_configured') and cls._configured:
             return
         cls.app_name = (kwargs['name'] if 'name' in kwargs
                         else cls.DEFAULT_APP_NAME)
-        script_name = sys.argv[0]
-        basedir = os.path.dirname(os.path.realpath(script_name))
-        default_logdir = basedir + '/logs'
+        default_logdir = cls.basedir + '/logs'
         loglevel = (kwargs['loglevel']
                     if 'loglevel' in kwargs else logging.INFO)
-        cls.add_arg('basedir', basedir)
         cls.add_arg('debug', arg('--debug',
                                  action='store_true',
                                  default=kwargs.get('debug', False),
@@ -129,7 +137,6 @@ class App(AppBase):
                                      help='Log option: {a,d,h,n,w}',
                                      metavar='VALUE'))
         cls.add_arg('loglevel', loglevel)
-        cls.add_arg('script_name', script_name)
         cls.add_arg('quiet', arg('--quiet',
                                  action='store_true',
                                  default=kwargs.get('quiet', False),
@@ -154,7 +161,7 @@ class App(AppBase):
             if (self._config['loglevel'] < logging.DISABLE
                     and self._config['loglevel'] > logging.DEBUG):
                 self._config['loglevel'] = logging.DEBUG
-        logger_name = self._config['script_name']
+        logger_name = App.entry_script
         logger_config = {
             'logdir': self._config['logdir'],
             'level': self._config['loglevel'],
@@ -187,3 +194,6 @@ class App(AppBase):
 
     def _postprocess(self):
         logging.i("*** [DONE] ***")
+
+
+App._static_initialize()
