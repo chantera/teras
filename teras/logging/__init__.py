@@ -134,6 +134,7 @@ logging.setLoggerClass(Logger)
 setRootLogger(RootLogger(WARNING))
 
 
+PATH_SEP = os.path.sep
 DATE_FORMAT = "%Y-%m-%d %H:%M:%S.%f %Z"
 
 
@@ -198,13 +199,13 @@ class AppLogger(Logger):
             if not os.path.isdir(logdir):
                 raise FileNotFoundError("logdir was not found: "
                                         "'%s'" % logdir)
-            logdir += '/'
+            logdir += PATH_SEP
         else:
             logdir = ''
 
-        if '/' in config['filename']:
-            raise ValueError("Invalid character '/' is included: {}"
-                             .format(config['filename']))
+        if PATH_SEP in config['filename']:
+            raise ValueError("Invalid character '{}' is included: {}"
+                             .format(PATH_SEP, config['filename']))
 
         basename, ext = os.path.splitext(config['filename'])
         basename = (config['fileprefix']
