@@ -114,24 +114,33 @@ class Trainer(EventSender):
 
     def fit(self,
             x,
-            y,
+            y=None,
             batch_size=32,
             epochs=10,
             validation_data=None,
             verbose=True):
 
-        train_dataset = Dataset(x, y)
+        if isinstance(x, Dataset):
+            train_dataset = x
+            assert y is None
+        elif y is not None:
+            train_dataset = Dataset(x, y)
+        else:
+            raise ValueError('incomplete input data: x={}, y={}'
+                             .format(type(x), y))
 
         if validation_data:
             do_validation = True
-            if len(validation_data) == 2:
+            if isinstance(validation_data, Dataset):
+                val_dataset = validation_data
+            elif len(validation_data) == 2:
                 val_x, val_y = validation_data
+                val_dataset = Dataset(val_x, val_y)
             else:
                 raise ValueError('When passing validation_data, '
-                                 'it must contain 2 (x_val, y_val) '
-                                 'items, however it contains %d items' %
-                                 len(validation_data))
-            val_dataset = Dataset(val_x, val_y)
+                                 'it must be dataset or contain '
+                                 '2 (x_val, y_val) items: {}'
+                                 .format(type(validation_data)))
         else:
             do_validation = False
 
@@ -215,8 +224,10 @@ class Trainer(EventSender):
                 dataset.batch(batch_size, colwise=True, shuffle=train)):
             xs, ts = batch[:-1], batch[-1]
             if len(xs) == 1:
-                xs = xs[0]
-            xs, ts = convert(xs), convert(ts)
+                xs = [convert(xs[0])]
+            else:
+                xs = convert(xs)
+            ts = convert(ts)
 
             batch_logs = {
                 'train': train,
@@ -229,7 +240,7 @@ class Trainer(EventSender):
             }
             self.notify(TrainEvent.BATCH_BEGIN, batch_logs)
 
-            ys = forward(xs)
+            ys = forward(*xs)
             loss = lossfun(ys, ts)
 
             batch_logs['ys'] = ys
