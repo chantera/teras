@@ -223,7 +223,7 @@ class ConfigArgParser(ArgParser):
             self._config = self._read_config(config_file, groups,
                                              section_prefix)
             self._source = config_file
-        elif config_file != self._default_config_file:
+        elif config_file != os.path.expanduser(self._default_config_file):
             raise FileNotFoundError("config file was not found: "
                                     "'%s'" % config_file)
 
