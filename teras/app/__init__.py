@@ -102,6 +102,7 @@ class App(AppBase):
     DEFAULT_CONFIG_FILE = "~/.teras.conf"
     app_name = ''
     _argparser = ConfigArgParser(DEFAULT_CONFIG_FILE)
+    verbose = True
 
     @staticmethod
     def _static_initialize():
@@ -157,7 +158,7 @@ class App(AppBase):
                                      metavar='VALUE'))
         cls.add_arg('quiet', arg('--quiet',
                                  action='store_true',
-                                 default=kwargs.get('quiet', False),
+                                 default=kwargs.get('quiet', not(App.verbose)),
                                  help='execute quietly: '
                                  'does not print any message'))
         cls._configured = True
@@ -173,7 +174,7 @@ class App(AppBase):
 
     def _preprocess(self):
         uname = os.uname()
-        verbose = not(self._config['quiet'])
+        App.verbose = not(self._config['quiet'])
         App.debug = self._config['debug']
 
         loglevel = logging.logging._checkLevel(self._config['loglevel'])
@@ -186,7 +187,7 @@ class App(AppBase):
             'logdir': self._config['logdir'],
             'filemode': 'a',
             'level': loglevel,
-            'verbosity': logging.TRACE if verbose else logging.DISABLE
+            'verbosity': logging.TRACE if App.verbose else logging.DISABLE
         }
         for char in self._config['logoption']:
             if char == 'a':
@@ -205,7 +206,7 @@ class App(AppBase):
         logging.AppLogger.configure(**logger_config)
         logger = logging.AppLogger(logger_name)
         logging.setRootLogger(logger)
-        if not verbose:
+        if not App.verbose:
             sys.stdout = sys.stderr = open(os.devnull, 'w')
 
         logger.v(str(os.uname()))
