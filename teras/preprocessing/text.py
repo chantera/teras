@@ -28,6 +28,14 @@ class NltkTokenizer(Tokenizer)
 """
 
 
+def normal(scale, dim):
+    return np.random.normal(0, scale, dim)
+
+
+def uniform(scale, dim):
+    return np.random.uniform(-1 * scale, 1 * scale, dim)
+
+
 class Preprocessor:
 
     def __init__(self,
@@ -35,6 +43,7 @@ class Preprocessor:
                  embed_size=50,
                  unknown="<UNK>",
                  tokenizer=None,
+                 initializer=None,
                  preprocess=None):
         self._init_embeddings(embed_file, embed_size)
         self._unknown_id = self._add_vocabulary(unknown, random=False)
@@ -43,7 +52,11 @@ class Preprocessor:
             self._tokenizer = tokenizer
         else:
             self._tokenizer = SimpleTokenizer()
-        if preprocess is not None:
+        if initializer:
+            self._initializer = initializer
+        else:
+            self._initializer = lambda: uniform(1.0, self._embed_size)
+        if preprocess:
             self._preprocess_token = preprocess
         else:
             self._preprocess_token = \
@@ -105,7 +118,7 @@ class Preprocessor:
         self._vocabulary[word] = index
         if random:
             # generate a random embedding for an unknown word
-            word_vector = np.random.uniform(-1, 1, self._embed_size)
+            word_vector = self._initializer()
         else:
             word_vector = np.zeros(self._embed_size, dtype=np.float32)
         self._new_embeddings.append(word_vector)
