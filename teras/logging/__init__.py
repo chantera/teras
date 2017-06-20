@@ -38,7 +38,7 @@ class Formatter(logging.Formatter):
     def formatTime(self, record, datefmt=None):
         ct = self.converter(record.created)
         if datefmt:
-            t = datefmt.replace('%f', str(int(record.msecs)))
+            t = datefmt.replace('%f', '{:03d}'.format(int(record.msecs)))
             s = time.strftime(t, ct)
         else:
             t = time.strftime(self.default_time_format, ct)
