@@ -112,7 +112,7 @@ class Trainer(EventSender):
                                    callback.init_progressbar)
                 callback.implement(TrainEvent.EPOCH_VALIDATE_END,
                                    callback.finish_progressbar)
-            self.attach_callback(callback, update=True)
+            self.attach_callback(callback, priority=300, update=True)
 
         if self._acc_func is not None:
             self.attach_callback(Reporter(self._acc_func), priority=200)
@@ -123,7 +123,7 @@ class Trainer(EventSender):
                               "#samples: {}, loss: {:.8f}"
                               .format(data['epoch'],
                                       data['size'],
-                                      float(data['loss']))))
+                                      data['loss'])))
             if do_validation:
                 self.add_hook(TrainEvent.EPOCH_VALIDATE_END,
                               lambda data: Log.i(
@@ -131,7 +131,7 @@ class Trainer(EventSender):
                                   "#samples: {}, loss: {:.8f}"
                                   .format(data['epoch'],
                                           data['size'],
-                                          float(data['loss']))))
+                                          data['loss'])))
         self.add_hook(TrainEvent.EPOCH_END, lambda data: Log.v('-'))
 
     def _process(self,
@@ -173,8 +173,8 @@ class Trainer(EventSender):
             loss = lossfun(ys, ts)
 
             batch_logs['ys'] = ys
-            batch_logs['loss'] = loss
-            logs['loss'] += loss
+            batch_logs['loss'] = float(loss)
+            logs['loss'] += float(loss)
 
             if train:
                 self._update(self._optimizer, loss)

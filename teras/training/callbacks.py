@@ -49,7 +49,7 @@ class Reporter(Callback):
     def on_epoch_train_end(self, data):
         metrics = {
             'accuracy': self._logs['accuracy'] / data['num_batches'],
-            'loss': float(data['loss'])
+            'loss': data['loss']
         }
         Log.i("[training] epoch {} - "
               "#samples: {}, loss: {:.8f}, accuracy: {:.8f}"
@@ -60,7 +60,7 @@ class Reporter(Callback):
     def on_epoch_validate_end(self, data):
         metrics = {
             'accuracy': self._logs['accuracy'] / data['num_batches'],
-            'loss': float(data['loss'])
+            'loss': data['loss']
         }
         Log.i("[validation] epoch {} - "
               "#samples: {}, loss: {:.8f}, accuracy: {:.8f}"
