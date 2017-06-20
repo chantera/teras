@@ -34,7 +34,8 @@ class Preprocessor:
                  embed_file=None,
                  embed_size=50,
                  unknown="<UNK>",
-                 tokenizer=None):
+                 tokenizer=None,
+                 preprocess=None):
         self._init_embeddings(embed_file, embed_size)
         self._unknown_id = self._add_vocabulary(unknown, random=False)
         self._pad_id = -1
@@ -42,6 +43,14 @@ class Preprocessor:
             self._tokenizer = tokenizer
         else:
             self._tokenizer = SimpleTokenizer()
+        if preprocess is not None:
+            self._preprocess_token = preprocess
+        else:
+            self._preprocess_token = \
+                lambda x: re.sub(r'^\d+(,\d+)*(\.\d+)?$', '<NUM>', x.lower())
+
+    def set_preprocess_func(self, func):
+        self._preprocess_token = func
 
     def _init_embeddings(self, embed_file, embed_size):
         if embed_file is not None:
@@ -149,10 +158,6 @@ class Preprocessor:
         if preprocess:
             tokens = [self._preprocess_token(token) for token in tokens]
         return tokens
-
-    @staticmethod
-    def _preprocess_token(token):
-        return re.sub(r'^\d+(,\d+)*(\.\d+)?$', '<NUM>', token.lower())
 
     def fit_transform(self, raw_documents, length=None, preprocess=True):
         return self \
