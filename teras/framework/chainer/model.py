@@ -14,7 +14,7 @@ import numpy as np
 
 class Embed(ChainList):
 
-    def __init__(self, *args):
+    def __init__(self, *args, **kwargs):
         embeds = []
         for i, embeddings in enumerate(args):
             vocab_size, embed_size = embeddings.shape
@@ -26,11 +26,21 @@ class Embed(ChainList):
             embeds.append(embed)
         super(Embed, self).__init__(*embeds)
 
+        dropout = kwargs.get('dropout', 0.0)
+        assert dropout == 0 or type(dropout) == float
+        self._dropout_ratio = dropout
+        if dropout > 0:
+            self._dropout_func = lambda x, ratio: F.dropout(x, ratio)
+        else:
+            self._dropout_func = lambda x, ratio: x
+
     def __call__(self, *xs):
         hs = []
         batch = len(xs[0])
         for i in range(batch):
-            _hs = F.concat([embed(self.xp.array(_xs[i])) for _xs, embed in zip(xs, self)])
+            _hs = F.concat([self._dropout_func(embed(self.xp.array(_xs[i])),
+                                               self._dropout_ratio)
+                            for _xs, embed in zip(xs, self)])
             hs.append(_hs)
         return hs
 
