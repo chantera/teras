@@ -8,7 +8,8 @@ import queue
 from chainer import Chain, ChainList, cuda, initializers, link, Variable
 import chainer.functions as F
 import chainer.links as L
-from chainer.links.connection.n_step_rnn import argsort_list_descent, permutate_list
+from chainer.links.connection.n_step_rnn import (
+    argsort_list_descent, permutate_list)
 import numpy as np
 
 
@@ -58,13 +59,17 @@ class MLP(ChainList):
 
     class Layer(L.Linear):
 
-        def __init__(self, in_size, out_size=None, activation=None, dropout=0.0,
+        def __init__(self, in_size, out_size=None,
+                     activation=None, dropout=0.0,
                      nobias=False, initialW=None, initial_bias=None):
-            super(MLP.Layer, self).__init__(in_size, out_size, nobias, initialW, initial_bias)
+            super(MLP.Layer, self).__init__(in_size, out_size, nobias,
+                                            initialW, initial_bias)
             if activation is None:
                 self._activate = lambda x: x
             else:
-                assert callable(activation) and hasattr(F.activation, activation.__name__)
+                if not callable(activation):
+                    raise ValueError("activation must be callable: type={}"
+                                     .format(type(activation)))
                 self._activate = activation
             assert dropout == 0 or type(dropout) == float
             self._dropout_ratio = dropout
@@ -145,12 +150,14 @@ class GlobalAttention(Chain):
         for h in F.transpose_sequence(hs[:batch]):
             size = h.shape[0]
             if size < batch:
-                h = F.vstack([h, Variable(self.xp.zeros((batch - size, h.shape[1]), dtype='f'))])
+                h = F.vstack([h, Variable(
+                    self.xp.zeros((batch - size, h.shape[1]), dtype='f'))])
             score = self._score_func(x, h)
             e = F.exp(score)
             _sum += e
             alphas += F.batch_matmul(h, e)
-        c = F.reshape(F.batch_matmul(F.reshape(alphas, (batch, dim)), (1 / _sum)), (batch, dim))
+        c = F.reshape(F.batch_matmul(F.reshape(alphas, (batch, dim)),
+                                     (1 / _sum)), (batch, dim))
         return c
 
     def _score_general(self, x, h):
@@ -207,7 +214,8 @@ class CRF(L.CRF1d):
             q = queue.PriorityQueue()
             x = _xs[_end]
             for i in range(x.shape[0]):
-                q.put((-alphas[_end][i], -x[i], _end, np.random.random(), np.array([i], np.int32)))
+                q.put((-alphas[_end][i], -x[i], _end,
+                       np.random.random(), np.array([i], np.int32)))
             while not q.empty() and c.qsize() < n + buf:
                 beta, score, time, r, path = q.get()
                 if time == 0:
@@ -219,7 +227,8 @@ class CRF(L.CRF1d):
                     _trans = score - cost[i, path[-1]]
                     _beta = -alphas[t][i] + _trans
                     _score = _trans - x[i]
-                    q.put((_beta, _score, t, np.random.random(), np.append(path, i)))
+                    q.put((_beta, _score, t,
+                           np.random.random(), np.append(path, i)))
             while not c.empty() and len(_paths) < n:
                 score, r, path = c.get()
                 _scores.append(-score)
@@ -296,10 +305,13 @@ class Biaffine(link.Link):
     def forward_one(self, x1, x2):
         xp = cuda.get_array_module(x1.data)
         l, d = x2.shape
-        return F.matmul(F.concat([x1, xp.ones((l, 1), 'f')]), F.matmul(self.W, x2, transb=True))
+        return F.matmul(F.concat([x1, xp.ones((l, 1), 'f')]),
+                        F.matmul(self.W, x2, transb=True))
 
     def forward_batch(self, x1, x2):
         xp = cuda.get_array_module(x1.data)
         b, l, d = x2.shape
         return F.batch_matmul(F.concat([x1, xp.ones((b, l, 1), 'f')], 2),
-                              F.reshape(F.linear(F.reshape(x2, (b * l, -1)), self.W), (b, l, -1)), transb=True)
+                              F.reshape(
+                                  F.linear(F.reshape(x2, (b * l, -1)), self.W),
+                                  (b, l, -1)), transb=True)
