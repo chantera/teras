@@ -242,6 +242,14 @@ class AppLogger(Logger):
         record.accessid = self._accessid
         return super(AppLogger, self).filter(record)
 
+    @property
+    def accessid(self):
+        return self._accessid
+
+    @property
+    def accesstime(self):
+        return self._accesssec
+
 
 BASIC_FORMAT = logging.BASIC_FORMAT
 APP_FORMAT = AppLogger.FORMAT
