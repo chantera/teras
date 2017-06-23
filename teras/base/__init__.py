@@ -19,6 +19,9 @@ class Context(dict, Callable):
             return default
         return self[key]
 
+    def __getattr__(self, attr):
+        return self[attr]
+
 
 class Runner(Callable):
 

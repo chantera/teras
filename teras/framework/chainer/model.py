@@ -18,7 +18,14 @@ class Embed(ChainList):
     def __init__(self, *args, **kwargs):
         embeds = []
         for i, embeddings in enumerate(args):
-            vocab_size, embed_size = embeddings.shape
+            if type(embeddings) is np.ndarray:
+                vocab_size, embed_size = embeddings.shape
+            elif type(embeddings) is tuple and len(embeddings) == 2:
+                vocab_size, embed_size = embeddings
+                embeddings = None
+            else:
+                raise ValueError('embeddings must be '
+                                 'np.ndarray or tuple(len=2)')
             embed = L.EmbedID(
                 in_size=vocab_size,
                 out_size=embed_size,
