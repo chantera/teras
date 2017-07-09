@@ -76,7 +76,7 @@ class Trainer(EventSender):
         self._init_events_on_fit(do_validation, verbose)
 
         forward = (self._model if callable(self._model)
-                   else self._model.forward())
+                   else self._model.forward)
         lossfun = self._loss_func
         convert = (self._converter if callable(self._converter)
                    else lambda x: x)
