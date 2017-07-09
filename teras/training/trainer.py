@@ -173,8 +173,8 @@ class Trainer(EventSender):
             loss = lossfun(ys, ts)
 
             batch_logs['ys'] = ys
-            batch_logs['loss'] = float(loss)
-            logs['loss'] += float(loss)
+            batch_logs['loss'] = loss.__float__()
+            logs['loss'] += loss.__float__()
 
             if train:
                 self._update(self._optimizer, loss)
