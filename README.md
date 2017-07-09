@@ -28,6 +28,7 @@ import chainer
 import chainer.functions as F
 
 from teras.app import App, arg
+import teras.dataset
 from teras.framework.chainer import config as chainer_config, to_device
 from teras.framework.chainer.model import MLP
 import teras.logging as Log
@@ -41,9 +42,9 @@ def train(n_epoch=20,
           dropout=0.2,
           gpu=-1):
 
-    train, test = chainer.datasets.get_mnist()
-    train_x, train_y = train._datasets
-    test_x, test_y = test._datasets
+    train, test = teras.dataset.get_mnist()
+    train_x, train_y = train
+    test_x, test_y = test
 
     Log.v('')
     Log.i('--------------------------------')
