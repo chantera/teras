@@ -294,57 +294,34 @@ class Biaffine(link.Link):
     """
 
     def __init__(self, left_size, right_size, out_size,
-                 nobias=(False, False, False),
-                 initialW=None, initial_bias=None):
+                 nobias=(False, False, False)):
         super(Biaffine, self).__init__()
         self.in_sizes = (left_size, right_size)
         self.out_size = out_size
         self.nobias = nobias
 
         with self.init_scope():
-            shape = (left_size, right_size, out_size)
-            if isinstance(initialW, (np.ndarray, cuda.ndarray)):
-                assert initialW.shape == shape
+            shape = (left_size + int(not(self.nobias[0])),
+                     right_size + int(not(self.nobias[1])),
+                     out_size)
             self.W = Parameter(
-                initializers._get_initializer(initialW), shape)
-
-            if not all(self.nobias):
-                self._init_bias(initial_bias)
-
-    def _init_bias(self, initial_bias):
-        V1_shape = (self.in_sizes[0], self.out_size)
-        V2_shape = (self.in_sizes[1], self.out_size)
-        b_shape = (self.out_size,)
-
-        if isinstance(initial_bias, tuple):
-            initialV1, initialV2, initialb = initial_bias
-            if isinstance(initialV1, (np.ndarray, cuda.ndarray)):
-                assert initialV1.shape == V1_shape
-            if isinstance(initialV2, (np.ndarray, cuda.ndarray)):
-                assert initialV2.shape == V2_shape
-            if isinstance(initialb, (np.ndarray, cuda.ndarray)):
-                assert initialb.shape == b_shape
-        elif initial_bias is None:
-            initialV1, initialV2, initialb = None, None, 0
-        else:
-            raise ValueError('initial_bias must be tuple or None')
-
-        if not isinstance(self.nobias, tuple):
-            raise ValueError('nobias must be tuple')
-        if not self.nobias[0]:
-            initialV1 = initializers._get_initializer(initialV1)
-            self.V1 = Parameter(initialV1, V1_shape)
-        if not self.nobias[1]:
-            initialV2 = initializers._get_initializer(initialV2)
-            self.V2 = Parameter(initialV2, V2_shape)
-        if not self.nobias[2]:
-            initialb = initializers._get_initializer(initialb)
-            self.b = Parameter(initialb, b_shape)
+                initializers._get_initializer(None), shape)
+            if not self.nobias[2]:
+                self.b = Parameter(0, (self.out_size,))
 
     def __call__(self, x1, x2):
+        xp = self.xp
         out_size = self.out_size
         batch_size, len1, dim1 = x1.shape
+        if not self.nobias[0]:
+            x1 = F.concat((x1, xp.ones((batch_size, len1, 1),
+                                       dtype=xp.float32)), axis=2)
+            dim1 += 1
         len2, dim2 = x2.shape[1:]
+        if not self.nobias[1]:
+            x2 = F.concat((x2, xp.ones((batch_size, len2, 1),
+                                       dtype=xp.float32)), axis=2)
+            dim2 += 1
         x1_reshaped = F.reshape(x1, (batch_size * len1, dim1))
         W_reshaped = F.reshape(F.transpose(self.W, (0, 2, 1)),
                                (dim1, out_size * dim2))
@@ -354,15 +331,6 @@ class Biaffine(link.Link):
             F.reshape(F.batch_matmul(affine, x2, transb=True),
                       (batch_size, len1, out_size, len2)),
             (0, 1, 3, 2))
-        if not self.nobias[0]:
-            left_bias = F.reshape(F.matmul(x1_reshaped, self.V1),
-                                  (batch_size, len1, 1, out_size))
-            biaffine += F.broadcast_to(left_bias, biaffine.shape)
-        if not self.nobias[1]:
-            right_bias = F.reshape(
-                F.matmul(F.reshape(x2, (batch_size * len2, dim2)), self.V2),
-                (batch_size, 1, len2, out_size))
-            biaffine += F.broadcast_to(right_bias, biaffine.shape)
         if not self.nobias[2]:
             biaffine += F.broadcast_to(self.b, biaffine.shape)
         return biaffine
