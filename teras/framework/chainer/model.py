@@ -86,7 +86,12 @@ class MLP(ChainList):
                 self._dropout_func = lambda x, ratio: x
 
         def __call__(self, x):
+            shape = x.shape
+            # _slice = shape[0:-1]
+            # _2d_shape = (np.product(_slice, dtype=np.int32), shape[-1])
+            x = F.reshape(x, (-1, shape[-1]))
             y = super(MLP.Layer, self).__call__(x)
+            y = F.reshape(y, shape[0:-1] + (-1,))
             return self._dropout_func(self._activate(y), self._dropout_ratio)
 
 
