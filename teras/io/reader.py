@@ -6,7 +6,10 @@ from teras.base import Iterator
 class Reader(Iterator):
 
     def __init__(self, file=None):
-        self.set_file(file)
+        if file is not None:
+            self.set_file(file)
+        else:
+            self.reset()
 
     def set_file(self, file):
         file = os.path.expanduser(file)
