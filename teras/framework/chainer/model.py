@@ -1,8 +1,7 @@
 """
-This library includes neural network models implemented with Chainer (v2.0.0)
+This library includes neural network models implemented with Chainer (v2.0.1)
 """
 
-import math
 import queue
 
 from chainer import Chain, ChainList, cuda, initializers, link, Variable
@@ -10,6 +9,7 @@ import chainer.functions as F
 import chainer.links as L
 from chainer.links.connection.n_step_rnn import (
     argsort_list_descent, permutate_list)
+from chainer.variable import Parameter
 import numpy as np
 
 
@@ -289,41 +289,80 @@ class CharCNN(Chain):
 
 
 class Biaffine(link.Link):
-    """This model has not been updated and tested for Chainer v2.0.0"""
+    """
+    https://github.com/tdozat/Parser/blob/ca1298949eaae3df6da3998667c8ffc60ee77440/lib/linalg.py#L116  # NOQA
+    """
 
-    def __init__(self, in_size, out_size, wscale=1, initialW=None):
+    def __init__(self, left_size, right_size, out_size,
+                 nobias=(False, False, False),
+                 initialW=None, initial_bias=None):
         super(Biaffine, self).__init__()
-        self.initialW = initialW
-        self.wscale = wscale
+        self.in_sizes = (left_size, right_size)
         self.out_size = out_size
-        self._W_initializer = initializers._get_initializer(
-            initialW, math.sqrt(wscale))
-        self._initialize_params(in_size)
+        self.nobias = nobias
 
-    def _initialize_params(self, in_size):
-        self.add_param('W', (in_size + 1, self.out_size),
-                       initializer=self._W_initializer)
+        with self.init_scope():
+            shape = (left_size, right_size, out_size)
+            if isinstance(initialW, (np.ndarray, cuda.ndarray)):
+                assert initialW.shape == shape
+            self.W = Parameter(
+                initializers._get_initializer(initialW), shape)
+
+            if not all(self.nobias):
+                self._init_bias(initial_bias)
+
+    def _init_bias(self, initial_bias):
+        V1_shape = (self.in_sizes[0], self.out_size)
+        V2_shape = (self.in_sizes[1], self.out_size)
+        b_shape = (self.out_size,)
+
+        if isinstance(initial_bias, tuple):
+            initialV1, initialV2, initialb = initial_bias
+            if isinstance(initialV1, (np.ndarray, cuda.ndarray)):
+                assert initialV1.shape == V1_shape
+            if isinstance(initialV2, (np.ndarray, cuda.ndarray)):
+                assert initialV2.shape == V2_shape
+            if isinstance(initialb, (np.ndarray, cuda.ndarray)):
+                assert initialb.shape == b_shape
+        elif initial_bias is None:
+            initialV1, initialV2, initialb = None, None, 0
+        else:
+            raise ValueError('initial_bias must be tuple or None')
+
+        if not isinstance(self.nobias, tuple):
+            raise ValueError('nobias must be tuple')
+        if not self.nobias[0]:
+            initialV1 = initializers._get_initializer(initialV1)
+            self.V1 = Parameter(initialV1, V1_shape)
+        if not self.nobias[1]:
+            initialV2 = initializers._get_initializer(initialV2)
+            self.V2 = Parameter(initialV2, V2_shape)
+        if not self.nobias[2]:
+            initialb = initializers._get_initializer(initialb)
+            self.b = Parameter(initialb, b_shape)
 
     def __call__(self, x1, x2):
-        """https://github.com/tdozat/Parser/blob/master/lib/linalg.py"""
-        dim = len(x1.shape)
-        if dim == 3:
-            return self.forward_batch(x1, x2)
-        elif dim == 2:
-            return self.forward_one(x1, x2)
-        else:
-            raise RuntimeError()
-
-    def forward_one(self, x1, x2):
-        xp = cuda.get_array_module(x1.data)
-        l, d = x2.shape
-        return F.matmul(F.concat([x1, xp.ones((l, 1), 'f')]),
-                        F.matmul(self.W, x2, transb=True))
-
-    def forward_batch(self, x1, x2):
-        xp = cuda.get_array_module(x1.data)
-        b, l, d = x2.shape
-        return F.batch_matmul(F.concat([x1, xp.ones((b, l, 1), 'f')], 2),
-                              F.reshape(
-                                  F.linear(F.reshape(x2, (b * l, -1)), self.W),
-                                  (b, l, -1)), transb=True)
+        out_size = self.out_size
+        batch_size, len1, dim1 = x1.shape
+        len2, dim2 = x2.shape[1:]
+        x1_reshaped = F.reshape(x1, (batch_size * len1, dim1))
+        W_reshaped = F.reshape(F.transpose(self.W, (0, 2, 1)),
+                               (dim1, out_size * dim2))
+        affine = F.reshape(F.matmul(x1_reshaped, W_reshaped),
+                           (batch_size, len1 * out_size, dim2))
+        biaffine = F.transpose(
+            F.reshape(F.batch_matmul(affine, x2, transb=True),
+                      (batch_size, len1, out_size, len2)),
+            (0, 1, 3, 2))
+        if not self.nobias[0]:
+            left_bias = F.reshape(F.matmul(x1_reshaped, self.V1),
+                                  (batch_size, len1, 1, out_size))
+            biaffine += F.broadcast_to(left_bias, biaffine.shape)
+        if not self.nobias[1]:
+            right_bias = F.reshape(
+                F.matmul(F.reshape(x2, (batch_size * len2, dim2)), self.V2),
+                (batch_size, 1, len2, out_size))
+            biaffine += F.broadcast_to(right_bias, biaffine.shape)
+        if not self.nobias[2]:
+            biaffine += F.broadcast_to(self.b, biaffine.shape)
+        return biaffine
