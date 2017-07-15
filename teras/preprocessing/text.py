@@ -37,6 +37,14 @@ class Vocab(UserDict):
         self._index = -1
         self._id2word = {}
 
+    def get(self, key, default=None):
+        if key in self:
+            return self[key]
+        return default
+
+    def add(self, key):
+        return self[key]
+
     def __missing__(self, key):
         self._index = idx = self._index + 1
         self.data[key] = idx
@@ -165,7 +173,8 @@ class Preprocessor:
         elif embed_size is not None:
             if embed_size <= 0 or type(embed_size) is not int:
                 raise ValueError("embed_size must be a positive integer value")
-            vocabulary, embeddings = {}, np.zeros((0, embed_size), np.float32)
+            vocabulary, embeddings = \
+                Vocab(), np.zeros((0, embed_size), np.float32)
         else:
             raise ValueError("embed_file os embed_size must be specified")
 
@@ -176,7 +185,7 @@ class Preprocessor:
 
     @staticmethod
     def _load_embeddings(embed_file, vocab_file=None):
-        vocabulary = {}
+        vocabulary = Vocab()
         embeddings = []
         if vocab_file:
             with open(embed_file) as ef, open(vocab_file) as vf:
@@ -184,7 +193,7 @@ class Preprocessor:
                     word = line2.strip()
                     vector = line1.strip().split(" ")
                     if word not in vocabulary:
-                        vocabulary[word] = len(vocabulary)
+                        vocabulary.add(word)
                         embeddings.append(np.array(vector, dtype=np.float32))
         else:
             with open(embed_file) as f:
@@ -196,15 +205,14 @@ class Preprocessor:
                     cols = line.strip().split(" ")
                     word = cols[0]
                     if word not in vocabulary:
-                        vocabulary[word] = len(vocabulary)
+                        vocabulary.add(word)
                         embeddings.append(np.array(cols[1:], dtype=np.float32))
         return vocabulary, np.array(embeddings)
 
     def _add_vocabulary(self, word, random=True):
         if word in self._vocabulary:
             return self._vocabulary[word]
-        index = len(self._vocabulary)
-        self._vocabulary[word] = index
+        index = self._vocabulary[word]
         if random:
             # generate a random embedding for an unknown word
             word_vector = self._initializer()
@@ -221,8 +229,7 @@ class Preprocessor:
     def _fit_each(self, raw_document, preprocess=True):
         tokens = self._extract_tokens(raw_document, preprocess)
         for token in tokens:
-            if token not in self._vocabulary:
-                self._add_vocabulary(token, random=True)
+            self._add_vocabulary(token, random=True)
         return self
 
     def fit_one(self, raw_document, preprocess=True):
@@ -246,7 +253,7 @@ class Preprocessor:
         else:
             word_ids = np.zeros(len(tokens), dtype=np.int32)
         for i, token in enumerate(tokens):
-            word_ids[i] = self._vocabulary.get(token, self._unknown_id)
+            word_ids[i] = self.get_vocabulary_id(token)
         return word_ids
 
     def transform_one(self, raw_document, length=None, preprocess=True):
@@ -286,7 +293,7 @@ class Preprocessor:
         return self._embeddings
 
     def get_vocabulary_id(self, word):
-        return self._vocabulary.get(word, -1)
+        return self._vocabulary.get(word, self._unknown_id)
 
     @property
     def embeddings(self):
