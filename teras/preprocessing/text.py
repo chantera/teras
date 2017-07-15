@@ -1,4 +1,6 @@
 from abc import ABCMeta, abstractmethod
+from collections import UserDict
+import copy
 import re
 
 import numpy as np
@@ -26,6 +28,93 @@ class NltkTokenizer(Tokenizer)
     def tokenize(self, document):
         return word_tokenize(document)
 """
+
+
+class Vocab(UserDict):
+
+    def __init__(self):
+        super(Vocab, self).__init__()
+        self._index = -1
+        self._id2word = {}
+
+    def __missing__(self, key):
+        self._index = idx = self._index + 1
+        self.data[key] = idx
+        self._id2word[idx] = key
+        return idx
+
+    def __setitem__(self, key, item):
+        if not isinstance(item, int):
+            raise ValueError("item must be int, but {} given"
+                             .format(type(item)))
+        if self._id2word.get(item, key) != key:
+            raise ValueError("item has already been assigned "
+                             "to another key".format(type(item)))
+        if key in self.data:
+            del self._id2word[self.data[key]]
+        self.data[key] = item
+        self._id2word[item] = key
+        if item > self._index:
+            self._index = item
+
+    def __delitem__(self, key):
+        del self._id2word[self.data.pop(key)]
+
+    def copy(self):
+        data = self.data
+        id2word = self._id2word
+        try:
+            self.data = {}
+            self._id2word = {}
+            c = copy.copy(self)
+        finally:
+            self.data = data
+            self._id2word = id2word
+        c.update(data)
+        return c
+
+    @classmethod
+    def fromkeys(cls, iterable):
+        self = cls()
+        for idx, key in enumerate(iterable):
+            self.data[key] = idx
+            self._id2word[idx] = key
+        self._index = idx
+        return self
+
+    def lookup(self, value):
+        return self._id2word[value]
+
+    __marker = object()
+
+    def pop(self, key, default=__marker):
+        if key in self:
+            result = self[key]
+            del self[key]
+            return result
+        if default is self.__marker:
+            raise KeyError(key)
+        return default
+
+    def popitem(self):
+        result = self.data.popitem()
+        del self._id2word[result[1]]
+        return result
+
+    def clear(self):
+        self.data.clear()
+        self._id2word.clear()
+        self._index = 0
+
+    def update(self, *args, **kwargs):
+        for k, v in dict().update(*args, **kwargs):
+            self[k] = v
+
+    def setdefault(self, key, default=-1):
+        if key in self:
+            return self[key]
+        self[key] = default
+        return default
 
 
 def normal(scale, dim):
