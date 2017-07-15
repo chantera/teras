@@ -15,7 +15,7 @@ import numpy as np
 
 class Embed(ChainList):
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, dropout=0.0):
         embeds = []
         for i, embeddings in enumerate(args):
             if type(embeddings) is np.ndarray:
@@ -34,7 +34,6 @@ class Embed(ChainList):
             embeds.append(embed)
         super(Embed, self).__init__(*embeds)
 
-        dropout = kwargs.get('dropout', 0.0)
         assert dropout == 0 or type(dropout) == float
         self._dropout_ratio = dropout
         if dropout > 0:
@@ -87,8 +86,6 @@ class MLP(ChainList):
 
         def __call__(self, x):
             shape = x.shape
-            # _slice = shape[0:-1]
-            # _2d_shape = (np.product(_slice, dtype=np.int32), shape[-1])
             x = F.reshape(x, (-1, shape[-1]))
             y = super(MLP.Layer, self).__call__(x)
             y = F.reshape(y, shape[0:-1] + (-1,))

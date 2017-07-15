@@ -248,7 +248,7 @@ class ConfigArgParser(ArgParser):
             prefix = ''
 
         config = {}
-        parser = ConfigParser()
+        parser = ConfigParser(allow_no_value=True)
         parser.read(os.path.expanduser(file))
         if ConfigArgParser._DEBUG:
             print("config file loaded: {}".format(file), file=sys.stderr)
@@ -291,7 +291,7 @@ class ConfigArgParser(ArgParser):
         if prefix is None:
             prefix = ''
 
-        parser = ConfigParser()
+        parser = ConfigParser(allow_no_value=True)
         file = os.path.expanduser(file)
         if ConfigArgParser._DEBUG or True:
             print("write config to file: {}".format(file), file=sys.stderr)
