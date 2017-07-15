@@ -133,6 +133,14 @@ def uniform(scale, dim):
     return np.random.uniform(-1 * scale, 1 * scale, dim)
 
 
+def lower(x):
+    return x
+
+
+def replace_number(x):
+    return re.sub(r'^\d+(,\d+)*(\.\d+)?$', '<NUM>', x.lower())
+
+
 class Preprocessor:
 
     def __init__(self,
@@ -156,8 +164,7 @@ class Preprocessor:
         if preprocess:
             self._preprocess_token = preprocess
         else:
-            self._preprocess_token = \
-                lambda x: re.sub(r'^\d+(,\d+)*(\.\d+)?$', '<NUM>', x.lower())
+            self._preprocess_token = lower
 
     def set_preprocess_func(self, func):
         self._preprocess_token = func
