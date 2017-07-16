@@ -1,6 +1,5 @@
+from collections.abc import Iterator
 import os
-
-from teras.base import Iterator
 
 
 class Reader(Iterator):
