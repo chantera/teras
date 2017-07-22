@@ -33,9 +33,19 @@ class CorpusLoader(Loader):
     def filter(self, item):
         return True
 
-    def load(self, file, train=False):
+    def load(self, file, train=False, size=None):
         self._train = train
         self._reader.set_file(file)
-        samples = [self.map(item) for item in self._reader
-                   if self.filter(item)]
+        if size is None:
+            samples = [self.map(item) for item in self._reader
+                       if self.filter(item)]
+        else:
+            samples = []
+            for item in self._reader:
+                if len(samples) >= size:
+                    break
+                if not self.filter(item):
+                    continue
+                samples.append(self.map(item))
+
         return Dataset(samples)
