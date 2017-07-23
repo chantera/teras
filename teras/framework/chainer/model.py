@@ -287,7 +287,7 @@ class CharCNN(Chain):
 
 class Biaffine(link.Link):
     """
-    https://github.com/tdozat/Parser/blob/ca1298949eaae3df6da3998667c8ffc60ee77440/lib/linalg.py#L116  # NOQA
+    https://github.com/tdozat/Parser/blob/0739216129cd39d69997d28cbc4133b360ea3934/lib/linalg.py#L116  # NOQA
     """
 
     def __init__(self, left_size, right_size, out_size,
