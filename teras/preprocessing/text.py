@@ -319,3 +319,14 @@ class Preprocessor:
     @property
     def pad_id(self):
         return self._pad_id
+
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        state['_new_embeddings'] = []
+        del state['_embeddings']
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+        self._embeddings = np.zeros(
+            (self._vocabulary.size, self._embed_size), dtype=np.float32)

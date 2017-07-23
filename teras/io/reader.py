@@ -23,7 +23,11 @@ class Reader(Iterator):
         return self
 
     def __next__(self):
-        return self._iterator.__next__()
+        try:
+            return self._iterator.__next__()
+        except Exception as e:
+            self.reset()
+            raise e
 
     def read(self, file=None):
         if file is not None:
@@ -34,7 +38,7 @@ class Reader(Iterator):
     def read_next(self):
         if self._iterator is None:
             self._iterator = self._get_iterator()
-        return self._iterator.__next__()
+        return self.__next__()
 
     def reset(self):
         self._iterator = None
@@ -43,6 +47,14 @@ class Reader(Iterator):
         with open(self.file, mode='r') as f:
             for line in f:
                 yield line.strip()
+
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        state['_iterator'] = None
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
 
 
 class ConllReader(Reader):
