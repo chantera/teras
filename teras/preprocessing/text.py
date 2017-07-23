@@ -115,7 +115,9 @@ class Vocab(UserDict):
         self._index = 0
 
     def update(self, *args, **kwargs):
-        for k, v in dict().update(*args, **kwargs):
+        d = dict()
+        d.update(*args, **kwargs)
+        for k, v in d.items():
             self[k] = v
 
     def setdefault(self, key, default=-1):
@@ -301,6 +303,10 @@ class Preprocessor:
 
     def get_vocabulary_id(self, word):
         return self._vocabulary.get(word, self._unknown_id)
+
+    @property
+    def vocabulary(self):
+        return self._vocabulary.copy()
 
     @property
     def embeddings(self):
