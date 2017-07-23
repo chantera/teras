@@ -17,6 +17,7 @@ class Embed(ChainList):
 
     def __init__(self, *args, dropout=0.0):
         embeds = []
+        self.size = 0
         for i, embeddings in enumerate(args):
             if type(embeddings) is np.ndarray:
                 vocab_size, embed_size = embeddings.shape
@@ -32,6 +33,7 @@ class Embed(ChainList):
                 initialW=embeddings,
             )
             embeds.append(embed)
+            self.size += embed_size
         super(Embed, self).__init__(*embeds)
 
         assert dropout == 0 or type(dropout) == float
