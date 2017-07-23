@@ -93,6 +93,10 @@ class Vocab(UserDict):
     def lookup(self, value):
         return self._id2word[value]
 
+    @property
+    def size(self):
+        return self.__len__()
+
     __marker = object()
 
     def pop(self, key, default=__marker):
