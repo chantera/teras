@@ -151,6 +151,7 @@ class AppLogger(Logger):
         'filesuffix': '',
         'fmt': FORMAT,
         'datefmt': DATE_FORMAT,
+        'mkdir': False,
     }
 
     @classmethod
@@ -193,10 +194,23 @@ class AppLogger(Logger):
             raise ValueError("Invalid filemode specified: {}"
                              .format(config['filemode']))
 
+        logfile = self._resolve_file(config, enable_numbering)
+        file_handler = logging.FileHandler(logfile, mode=filemode)
+        file_handler.setLevel(config['level'])
+        file_handler.setFormatter(
+            Formatter(config['fmt'], config['datefmt']))
+
+        self.addHandler(file_handler)
+
+    def _resolve_file(self, config, enable_numbering=False):
         logdir = config['logdir']
         if logdir:
             logdir = os.path.abspath(os.path.expanduser(logdir))
-            if not os.path.isdir(logdir):
+            if os.path.isdir(logdir):
+                pass
+            elif config['mkdir']:
+                os.makedirs(logdir)
+            else:
                 raise FileNotFoundError("logdir was not found: "
                                         "'%s'" % logdir)
             logdir += PATH_SEP
@@ -222,12 +236,7 @@ class AppLogger(Logger):
         else:
             logfile = logdir + basename + ext
 
-        file_handler = logging.FileHandler(logfile, mode=filemode)
-        file_handler.setLevel(config['level'])
-        file_handler.setFormatter(
-            Formatter(config['fmt'], config['datefmt']))
-
-        self.addHandler(file_handler)
+        return logfile
 
     def finalize(self):
         processtime = ('%3.9f' % (datetime.now(tzlocal())
