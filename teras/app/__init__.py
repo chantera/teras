@@ -21,7 +21,8 @@ class AppBase(Singleton):
     def add_command(cls, name, command, args={}, description=None):
         assert type(args) == dict
         cls._argparser.add_group(name, help=description)
-        for arg_name, value in args.items():
+        for arg_name, value in sorted(args.items(),
+                                      key=lambda x: x[1].names[0]):
             cls.add_arg(arg_name, value, group=name)
         cls._commands[name] = command
 

@@ -44,7 +44,7 @@ def arg(*args, **kwargs):
 class ArgDefinition(object):
 
     def __init__(self):
-        self._common_cmd_args = {}
+        self._common_cmd_args = OrderedDict()
         self._common_const_args = {}
         self._groups = []
         self._group_cmd_args = {}
@@ -70,7 +70,7 @@ class ArgDefinition(object):
     def def_group(self, group, **kwargs):
         if group not in self._groups:
             self._groups.append(group)
-            self._group_cmd_args[group] = {}
+            self._group_cmd_args[group] = OrderedDict()
             self._group_const_args[group] = {}
             self._group_descriptions[group] = kwargs
         elif kwargs:
