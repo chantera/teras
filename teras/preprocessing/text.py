@@ -153,20 +153,24 @@ class Preprocessor:
                  embed_file=None,
                  embed_size=50,
                  unknown="<UNK>",
+                 pad=None,
                  tokenizer=None,
                  initializer=None,
                  preprocess=None):
         self._init_embeddings(embed_file, embed_size)
-        self._unknown_id = self._add_vocabulary(unknown, random=False)
-        self._pad_id = -1
-        if tokenizer:
-            self._tokenizer = tokenizer
-        else:
-            self._tokenizer = SimpleTokenizer()
         if initializer:
             self._initializer = initializer
         else:
             self._initializer = lambda: uniform(1.0, self._embed_size)
+        if pad is not None:
+            self._pad_id = self._add_vocabulary(pad, random=False)
+        else:
+            self._pad_id = -1
+        self._unknown_id = self._add_vocabulary(unknown, random=True)
+        if tokenizer:
+            self._tokenizer = tokenizer
+        else:
+            self._tokenizer = SimpleTokenizer()
         if preprocess:
             self._preprocess_token = preprocess
         else:
