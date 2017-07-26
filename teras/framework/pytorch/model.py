@@ -1,3 +1,5 @@
+import math
+
 import numpy as np
 import torch
 from torch.autograd import Variable
@@ -81,9 +83,69 @@ class MLP(nn.ModuleList):
         def forward(self, x):
             size = x.size()
             if len(size) > 2:
-                x.contiguous()
-                y = super(MLP.Layer, self).forward(x.view(-1, size[-1]))
-                y.view(size[0:-1] + (-1,))
+                y = super(MLP.Layer, self).forward(
+                    x.contiguous().view(-1, size[-1]))
+                y = y.view(size[0:-1] + (-1,))
             else:
                 y = super(MLP.Layer, self).forward(x)
             return self._dropout(self._activate(y))
+
+
+class Biaffine(nn.Module):
+    """
+    https://github.com/tdozat/Parser/blob/0739216129cd39d69997d28cbc4133b360ea3934/lib/linalg.py#L116  # NOQA
+    """
+
+    def __init__(self, in1_features, in2_features, out_features,
+                 bias=(True, True, True)):
+        super(Biaffine, self).__init__()
+        self.in1_features = in1_features
+        self.in2_features = in2_features
+        self.out_features = out_features
+        self._use_bias = bias
+
+        shape = (in1_features + int(bias[0]),
+                 in2_features + int(bias[1]),
+                 out_features)
+        self.weight = nn.Parameter(torch.Tensor(*shape))
+        if bias[2]:
+            self.bias = nn.Parameter(torch.Tensor(out_features))
+        else:
+            self.register_parameter('bias', None)
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        stdv = 1. / math.sqrt(self.weight.size(0))
+        self.weight.data.uniform_(-stdv, stdv)
+        if self.bias is not None:
+            self.bias.data.uniform_(-stdv, stdv)
+
+    def forward(self, input1, input2):
+        out_size = self.out_features
+        batch_size, len1, dim1 = input1.size()
+        if self._use_bias[0]:
+            input1 = torch.cat((input1, Variable(
+                torch.ones(batch_size, len1, 1))), dim=2)
+            dim1 += 1
+        len2, dim2 = input2.size()[1:]
+        if self._use_bias[1]:
+            input2 = torch.cat((input2, Variable(
+                torch.ones(batch_size, len2, 1))), dim=2)
+            dim2 += 1
+        input1_reshaped = input1.contiguous().view(batch_size * len1, dim1)
+        W_reshaped = torch.transpose(self.weight, 1, 2) \
+            .contiguous().view(dim1, out_size * dim2)
+        affine = torch.mm(input1_reshaped, W_reshaped) \
+            .view(batch_size, len1 * out_size, dim2)
+        biaffine = torch.transpose(
+            torch.bmm(affine, torch.transpose(input2, 1, 2))
+            .view(batch_size, len1, out_size, len2), 2, 3)
+        if self._use_bias[2]:
+            biaffine += self.bias.expand_as(biaffine)
+        return biaffine
+
+    def __repr__(self):
+        return self.__class__.__name__ + ' (' \
+            + 'in1_features=' + str(self.in1_features) \
+            + ', in2_features=' + str(self.in2_features) \
+            + ', out_features=' + str(self.out_features) + ')'
