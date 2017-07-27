@@ -78,7 +78,7 @@ class Saver(Callback):
                  interval=1, name="saver", **kwargs):
         super(Saver, self).__init__(name, **kwargs)
         self._model = model
-        self._basename = os.path.join(directory, basename)
+        self._basename = os.path.join(os.path.expanduser(directory), basename)
         self._context = context
         if not isinstance(interval, int):
             raise ValueError("interval must be specified as int value: "
@@ -87,13 +87,15 @@ class Saver(Callback):
 
     def on_train_begin(self, data):
         if self._context is not None:
-            with open(self._basename + '.context', 'wb') as f:
+            context_file = self._basename + '.context'
+            Log.i("saving the context to {} ...".format(context_file))
+            with open(context_file, 'wb') as f:
                 teras.utils.dump(self._context, f)
 
     def on_epoch_end(self, data):
         epoch = data['epoch']
         if epoch % self._interval == 0:
-            model_file = "{}.{}.pkl".format(self._basename, data['epoch'])
+            model_file = "{}.{}.pkl".format(self._basename, epoch)
             Log.i("saving the model to {} ...".format(model_file))
             with open(model_file, 'wb') as f:
                 teras.utils.dump(self._model, f)

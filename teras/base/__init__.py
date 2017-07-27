@@ -113,8 +113,8 @@ class Context(Mapping, Callable):
         return self[key]
 
     def __getattr__(self, attr):
-        if attr in self:
-            self[attr]
+        if attr in self.data:
+            return self.data[attr]
         if not hasattr(self.data, attr):
             raise AttributeError("'{}' object has no attribute '{}'"
                                  .format(type(self).__name__, attr))
