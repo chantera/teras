@@ -38,16 +38,32 @@ class Embed(nn.ModuleList):
         else:
             self._dropout = lambda x: x
 
-    def __call__(self, *xs):
-        hs = []
+    def forward(self, *xs):
+        if next(self.parameters()).is_cuda:
+            hs = [_hs for _hs in self.embed_gpu(*xs)]
+        else:
+            hs = [_hs for _hs in self.embed_cpu(*xs)]
+        return hs
+
+    def embed_cpu(self, *xs):
         batch = len(xs[0])
         for i in range(batch):
             _hs = torch.cat(
                 [self._dropout(
-                    embed(Variable(torch.from_numpy(_xs[i].astype(np.int64)))))
+                    embed(Variable(
+                        torch.from_numpy(_xs[i].astype(np.int64)))))
                  for _xs, embed in zip(xs, self)], dim=1)
-            hs.append(_hs)
-        return hs
+            yield _hs
+
+    def embed_gpu(self, *xs):
+        batch = len(xs[0])
+        for i in range(batch):
+            _hs = torch.cat(
+                [self._dropout(
+                    embed(Variable(
+                        torch.from_numpy(_xs[i].astype(np.int64).cuda()))))
+                 for _xs, embed in zip(xs, self)], dim=1)
+            yield _hs
 
 
 class MLP(nn.ModuleList):
