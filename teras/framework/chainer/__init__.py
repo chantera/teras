@@ -42,7 +42,7 @@ def set_debug(debug):
 
 
 def set_model_to_device(model, device_id=-1):
-    if device_id >= -1:
+    if device_id >= 0:
         chainer.cuda.get_device_from_id(device_id).use()
         model.to_gpu()
     else:

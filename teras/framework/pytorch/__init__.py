@@ -17,7 +17,7 @@ def _update(optimizer, loss):
 
 
 def set_model_to_device(model, device_id=-1):
-    if device_id >= -1 or device_id is None:
+    if device_id >= 0 or device_id is None:
         model.cuda(device_id)
     else:
         model.cpu()
