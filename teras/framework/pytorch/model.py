@@ -40,7 +40,8 @@ class Embed(nn.ModuleList):
 
     def forward(self, *xs):
         if next(self.parameters()).is_cuda:
-            hs = [_hs for _hs in self.embed_gpu(*xs)]
+            device_id = next(self.parameters()).device_id
+            hs = [_hs for _hs in self.embed_gpu(*xs, device_id=device_id)]
         else:
             hs = [_hs for _hs in self.embed_cpu(*xs)]
         return hs
@@ -55,13 +56,14 @@ class Embed(nn.ModuleList):
                  for _xs, embed in zip(xs, self)], dim=1)
             yield _hs
 
-    def embed_gpu(self, *xs):
+    def embed_gpu(self, *xs, device_id=None):
         batch = len(xs[0])
         for i in range(batch):
             _hs = torch.cat(
                 [self._dropout(
                     embed(Variable(
-                        torch.from_numpy(_xs[i].astype(np.int64)).cuda())))
+                        torch.from_numpy(_xs[i].astype(np.int64))
+                        .cuda(device_id))))
                  for _xs, embed in zip(xs, self)], dim=1)
             yield _hs
 
