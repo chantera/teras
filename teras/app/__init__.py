@@ -5,7 +5,7 @@ import sys
 
 from teras import logging, utils
 from teras.app.argparse import arg, ArgParser, ConfigArgParser
-from teras.base import Singleton
+from teras.base import Singleton, classproperty, Context
 
 
 class AppBase(Singleton):
@@ -69,17 +69,27 @@ class AppBase(Singleton):
 
     @classmethod
     def _get_instance(cls):
-        if cls.__instance is None:
+        if not cls._has_instance():
             instance = object.__new__(cls)
+            instance._initialized = False
+            instance._command = None
+            instance._command_args = None
+            instance._config = None
+            instance._context = None
             cls.__instance = instance
         return cls.__instance
 
+    @classmethod
+    def _has_instance(cls):
+        return cls.__instance is not None
+
     def _initialize(self, command, args, config):
-        if hasattr(self, '_initialized') and self._initialized:
+        if self._initialized:
             return
         self._command = AppBase._commands[command]
         self._command_args = args
         self._config = config
+        self._context = Context(**args)
         self._initialized = True
 
     def _preprocess(self):
@@ -217,6 +227,12 @@ class App(AppBase):
 
     def _postprocess(self):
         logging.i("*** [DONE] ***")
+
+    @classproperty
+    def context(cls):
+        if not cls._has_instance():
+            return None
+        return cls._get_instance()._context
 
 
 App._static_initialize()
