@@ -139,16 +139,22 @@ class Biaffine(nn.Module):
             self.bias.data.uniform_(-stdv, stdv)
 
     def forward(self, input1, input2):
+        is_cuda = next(self.parameters()).is_cuda
+        device_id = next(self.parameters()).get_device() if is_cuda else None
         out_size = self.out_features
         batch_size, len1, dim1 = input1.size()
         if self._use_bias[0]:
-            input1 = torch.cat((input1, Variable(
-                torch.ones(batch_size, len1, 1))), dim=2)
+            ones = torch.ones(batch_size, len1, 1)
+            if is_cuda:
+                ones.cuda(device_id)
+            input1 = torch.cat((input1, Variable(ones)), dim=2)
             dim1 += 1
         len2, dim2 = input2.size()[1:]
         if self._use_bias[1]:
-            input2 = torch.cat((input2, Variable(
-                torch.ones(batch_size, len2, 1))), dim=2)
+            ones = torch.ones(batch_size, len2, 1)
+            if is_cuda:
+                ones.cuda(device_id)
+            input2 = torch.cat((input2, Variable(ones)), dim=2)
             dim2 += 1
         input1_reshaped = input1.contiguous().view(batch_size * len1, dim1)
         W_reshaped = torch.transpose(self.weight, 1, 2) \
