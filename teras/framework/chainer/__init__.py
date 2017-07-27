@@ -1,10 +1,10 @@
 import chainer
 
-from teras.framework.chainer import model
+from teras.framework.chainer import callbacks, model
 from teras.training.trainer import TrainEvent
 
-__all__ = ['chainer_train_on', 'chainer_train_off', 'config',
-           'model', 'set_debug', 'to_device', 'set_model_to_device']
+__all__ = ['callbacks', 'chainer_train_on', 'chainer_train_off', 'config',
+           'model', 'set_debug', 'set_model_to_device', 'to_device']
 
 
 # hack

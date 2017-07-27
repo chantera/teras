@@ -1,7 +1,10 @@
+import os
+
 from teras import logging as Log
 from teras.base.event import Callback
 from teras.training.event import TrainEvent
 from teras.utils.progressbar import ProgressBar
+import teras.utils
 
 
 class ProgressCallback(Callback):
@@ -67,3 +70,30 @@ class Reporter(Callback):
               .format(data['epoch'], data['size'],
                       metrics['loss'], metrics['accuracy']))
         self._history[-1]['validation'] = metrics
+
+
+class Saver(Callback):
+
+    def __init__(self, model, basename, directory='', context=None,
+                 interval=1, name="saver", **kwargs):
+        super(Saver, self).__init__(name, **kwargs)
+        self._model = model
+        self._basename = os.path.join(directory, basename)
+        self._context = context
+        if not isinstance(interval, int):
+            raise ValueError("interval must be specified as int value: "
+                             "actual('{}')".format(type(interval).__name__))
+        self._interval = interval
+
+    def on_train_begin(self, data):
+        if self._context is not None:
+            with open(self._basename + '.context', 'wb') as f:
+                teras.utils.dump(self._context, f)
+
+    def on_epoch_end(self, data):
+        epoch = data['epoch']
+        if epoch % self._interval == 0:
+            model_file = "{}.{}.pkl".format(self._basename, data['epoch'])
+            Log.i("saving the model to {} ...".format(model_file))
+            with open(model_file, 'wb') as f:
+                teras.utils.dump(self._model, f)

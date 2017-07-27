@@ -1,6 +1,8 @@
 import torch
 
-__all__ = ['config', 'set_model_to_device']
+from teras.framework.pytorch import callbacks, model
+
+__all__ = ['callbacks', 'config', 'model', 'set_model_to_device']
 
 
 # hack
