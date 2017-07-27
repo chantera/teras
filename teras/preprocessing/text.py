@@ -116,7 +116,7 @@ class Vocab(UserDict):
     def clear(self):
         self.data.clear()
         self._id2word.clear()
-        self._index = 0
+        self._index = -1
 
     def update(self, *args, **kwargs):
         d = dict()
