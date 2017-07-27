@@ -61,7 +61,7 @@ class Embed(nn.ModuleList):
             _hs = torch.cat(
                 [self._dropout(
                     embed(Variable(
-                        torch.from_numpy(_xs[i].astype(np.int64).cuda()))))
+                        torch.from_numpy(_xs[i].astype(np.int64)).cuda())))
                  for _xs, embed in zip(xs, self)], dim=1)
             yield _hs
 
