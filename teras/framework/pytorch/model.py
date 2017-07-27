@@ -40,7 +40,7 @@ class Embed(nn.ModuleList):
 
     def forward(self, *xs):
         if next(self.parameters()).is_cuda:
-            device_id = next(self.parameters()).device_id
+            device_id = next(self.parameters()).get_device()
             hs = [_hs for _hs in self.embed_gpu(*xs, device_id=device_id)]
         else:
             hs = [_hs for _hs in self.embed_cpu(*xs)]
