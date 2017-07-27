@@ -13,14 +13,16 @@ class ProgressCallback(Callback):
         super(ProgressCallback, self).__init__(name, **kwargs)
         self._pbar = ProgressBar()
         self.implement(TrainEvent.EPOCH_TRAIN_BEGIN, self.init_progressbar)
-        self.implement(TrainEvent.BATCH_BEGIN, self.update_progressbar)
+        self.implement(TrainEvent.BATCH_END, self.update_progressbar)
         self.implement(TrainEvent.EPOCH_TRAIN_END, self.finish_progressbar)
 
     def init_progressbar(self, data):
         self._pbar.start(data['size'])
+        self._count = 0
 
     def update_progressbar(self, data):
-        self._pbar.update((data['batch_size'] * data['batch_index']) + 1)
+        self._count += data['batch_size']
+        self._pbar.update(self._count)
 
     def finish_progressbar(self, data):
         self._pbar.finish()
