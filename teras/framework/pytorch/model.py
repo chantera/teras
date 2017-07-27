@@ -146,14 +146,14 @@ class Biaffine(nn.Module):
         if self._use_bias[0]:
             ones = torch.ones(batch_size, len1, 1)
             if is_cuda:
-                ones.cuda(device_id)
+                ones = ones.cuda(device_id)
             input1 = torch.cat((input1, Variable(ones)), dim=2)
             dim1 += 1
         len2, dim2 = input2.size()[1:]
         if self._use_bias[1]:
             ones = torch.ones(batch_size, len2, 1)
             if is_cuda:
-                ones.cuda(device_id)
+                ones = ones.cuda(device_id)
             input2 = torch.cat((input2, Variable(ones)), dim=2)
             dim2 += 1
         input1_reshaped = input1.contiguous().view(batch_size * len1, dim1)
