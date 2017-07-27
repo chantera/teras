@@ -4,7 +4,7 @@ from teras.framework.chainer import model
 from teras.training.trainer import TrainEvent
 
 __all__ = ['chainer_train_on', 'chainer_train_off', 'config',
-           'model', 'set_debug', 'to_device']
+           'model', 'set_debug', 'to_device', 'set_model_to_device']
 
 
 # hack
@@ -39,6 +39,14 @@ def set_debug(debug):
     else:
         chainer.config.debug = False
         chainer.config.type_check = False
+
+
+def set_model_to_device(model, device_id=-1):
+    if device_id >= -1:
+        chainer.cuda.get_device_from_id(device_id).use()
+        model.to_gpu()
+    else:
+        model.to_cpu()
 
 
 set_debug(chainer.config.debug)
