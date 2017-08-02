@@ -4,6 +4,7 @@ This library includes neural network models implemented with Chainer (v2.0.1)
 
 import queue
 
+from chainer import __version__ as chainer_version
 from chainer import Chain, ChainList, cuda, initializers, link, Variable
 import chainer.functions as F
 import chainer.links as L
@@ -11,6 +12,12 @@ from chainer.links.connection.n_step_rnn import (
     argsort_list_descent, permutate_list)
 from chainer.variable import Parameter
 import numpy as np
+
+
+if chainer_version.startswith('3'):
+    batch_matmul = F.matmul
+else:
+    batch_matmul = F.batch_matmul
 
 
 class Embed(ChainList):
@@ -166,14 +173,14 @@ class GlobalAttention(Chain):
             score = self._score_func(x, h)
             e = F.exp(score)
             _sum += e
-            alphas += F.batch_matmul(h, e)
-        c = F.reshape(F.batch_matmul(F.reshape(alphas, (batch, dim)),
+            alphas += batch_matmul(h, e)
+        c = F.reshape(batch_matmul(F.reshape(alphas, (batch, dim)),
                                      (1 / _sum)), (batch, dim))
         return c
 
     def _score_general(self, x, h):
         batch, dim = x.shape
-        return F.batch_matmul(F.reshape(self.W(x), (batch, 1, dim)), h)
+        return batch_matmul(F.reshape(self.W(x), (batch, 1, dim)), h)
 
     def _score_concat(self, x, h):
         return self.v(F.tanh(self.W(F.concat([x, h]))))
@@ -327,7 +334,7 @@ class Biaffine(link.Link):
         affine = F.reshape(F.matmul(x1_reshaped, W_reshaped),
                            (batch_size, len1 * out_size, dim2))
         biaffine = F.transpose(
-            F.reshape(F.batch_matmul(affine, x2, transb=True),
+            F.reshape(batch_matmul(affine, x2, transb=True),
                       (batch_size, len1, out_size, len2)),
             (0, 1, 3, 2))
         if not self.nobias[2]:
