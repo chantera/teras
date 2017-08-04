@@ -1,4 +1,5 @@
 import argparse
+import ast
 from collections import OrderedDict
 from configparser import ConfigParser
 import copy
@@ -344,12 +345,17 @@ class ConfigArgParser(ArgParser):
 
     @staticmethod
     def _cast_value(value, def_arg):
-        if 'type' in def_arg.kwargs:
-            _type = def_arg.kwargs['type']
-            value = _type(value) if _type is not bool else _getboolean(value)
-        elif 'default' in def_arg.kwargs:
-            _type = type(def_arg.kwargs['default'])
-            value = _type(value) if _type is not bool else _getboolean(value)
+        if 'type' in def_arg.kwargs or 'default' in def_arg.kwargs:
+            _type = (def_arg.kwargs['type'] if 'type' in def_arg.kwargs
+                     else type(def_arg.kwargs['default']))
+            if _type is dict:
+                value = ast.literal_eval(value)
+            elif _type is bool:
+                value = _getboolean(value)
+            elif _type is str and len(value) == 0:
+                value = def_arg.kwargs.get('default', None)
+            else:
+                value = _type(value)
         elif re.match(r"^(?:true|false)$", value, re.IGNORECASE):
             value = _getboolean(value)
         elif re.match(r"^\d+$", value):
