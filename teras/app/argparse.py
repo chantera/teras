@@ -158,10 +158,10 @@ class ArgParser(object):
         grouped = len(self._def.groups) > 1
 
         if command is not None:
-            if command not in self._args.groups:
+            if command not in self._def.groups:
                 raise ValueError("Undefined command is specified.")
             if grouped:
-                args = [command].extend(args)  # specify command
+                args = [command] + args  # specify command
 
         _def = self._def
         parsed_args = vars(parser.parse_args(args))
