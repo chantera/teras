@@ -37,6 +37,14 @@ class EmbedID(link.Link):
                 initialW = initializers.normal.Normal(1.0)
                 self.W = variable.Parameter(initialW, (in_size, out_size))
             elif fixed_weight:
+                initializer = initialW
+                if isinstance(initializer, (np.ndarray, cuda.ndarray)):
+                    xp = cuda.get_array_module(initialW)
+                    initializer = initializers.constant.Constant(initializer)
+                else:
+                    xp = np
+                initialW = initializers.generate_array(
+                    initializer, (in_size, out_size), xp)
                 self.W = variable.Variable(initialW, requires_grad=False)
             else:
                 self.W = variable.Parameter(initialW, (in_size, out_size))

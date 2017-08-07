@@ -131,12 +131,23 @@ class Vocab(UserDict):
         return default
 
 
-def normal(scale, dim):
-    return np.random.normal(0, scale, dim)
+_default_type = np.float32
 
 
-def uniform(scale, dim):
-    return np.random.uniform(-1 * scale, 1 * scale, dim)
+def _get_int_type(dtype):
+    if not isinstance(dtype, str):
+        dtype = dtype.__name__
+    return np.int64 if dtype == 'float64' else np.int32
+
+
+def normal(scale, dim, dtype=_default_type):
+    return np.random.normal(0, scale, dim) \
+        .astype(dtype, copy=False)
+
+
+def uniform(scale, dim, dtype=_default_type):
+    return np.random.uniform(-1 * scale, 1 * scale, dim) \
+        .astype(dtype, copy=False)
 
 
 def lower(x):
@@ -156,12 +167,16 @@ class Preprocessor:
                  pad=None,
                  tokenizer=None,
                  initializer=None,
-                 preprocess=None):
+                 preprocess=None,
+                 embed_dtype=np.float32):
+        self.embed_dtype = embed_dtype
+        self.index_dtype = _get_int_type(embed_dtype)
         self._init_embeddings(embed_file, embed_size)
         if initializer:
             self._initializer = initializer
         else:
-            self._initializer = lambda: uniform(1.0, self._embed_size)
+            self._initializer = lambda: \
+                uniform(1.0, self._embed_size, self.embed_dtype)
         if pad is not None:
             self._pad_id = self._add_vocabulary(pad, random=False)
         else:
@@ -185,13 +200,13 @@ class Preprocessor:
             if isinstance(embed_file, (list, tuple)):
                 embed_file, vocab_file = embed_file
             vocabulary, embeddings = \
-                self._load_embeddings(embed_file, vocab_file)
+                self._load_embeddings(embed_file, vocab_file, self.embed_dtype)
             embed_size = embeddings.shape[1]
         elif embed_size is not None:
             if embed_size <= 0 or type(embed_size) is not int:
                 raise ValueError("embed_size must be a positive integer value")
             vocabulary, embeddings = \
-                Vocab(), np.zeros((0, embed_size), np.float32)
+                Vocab(), np.zeros((0, embed_size), self.embed_dtype)
         else:
             raise ValueError("embed_file os embed_size must be specified")
 
@@ -201,7 +216,7 @@ class Preprocessor:
         self._embed_size = embed_size
 
     @staticmethod
-    def _load_embeddings(embed_file, vocab_file=None):
+    def _load_embeddings(embed_file, vocab_file=None, dtype=np.float32):
         vocabulary = Vocab()
         embeddings = []
         if vocab_file:
@@ -211,7 +226,7 @@ class Preprocessor:
                     vector = line1.strip().split(" ")
                     if word not in vocabulary:
                         vocabulary.add(word)
-                        embeddings.append(np.array(vector, dtype=np.float32))
+                        embeddings.append(np.array(vector, dtype=dtype))
         else:
             with open(embed_file) as f:
                 lines = f.readlines()
@@ -223,7 +238,7 @@ class Preprocessor:
                     word = cols[0]
                     if word not in vocabulary:
                         vocabulary.add(word)
-                        embeddings.append(np.array(cols[1:], dtype=np.float32))
+                        embeddings.append(np.array(cols[1:], dtype=dtype))
         return vocabulary, np.array(embeddings)
 
     def _add_vocabulary(self, word, random=True):
@@ -234,7 +249,7 @@ class Preprocessor:
             # generate a random embedding for an unknown word
             word_vector = self._initializer()
         else:
-            word_vector = np.zeros(self._embed_size, dtype=np.float32)
+            word_vector = np.zeros(self._embed_size, dtype=self.embed_dtype)
         self._new_embeddings.append(word_vector)
         return index
 
@@ -257,7 +272,7 @@ class Preprocessor:
         for document in raw_documents:
             samples.append(self._transform_each(document, length, preprocess))
         if length:
-            samples = np.array(samples, dtype=np.int32)
+            samples = np.array(samples, dtype=self.index_dtype)
         return samples
 
     def _transform_each(self, raw_document, length=None, preprocess=True):
@@ -266,9 +281,9 @@ class Preprocessor:
             if len(tokens) > length:
                 raise ValueError(
                     "Token length exceeds the specified length value")
-            word_ids = np.full(length, self._pad_id, dtype=np.int32)
+            word_ids = np.full(length, self._pad_id, dtype=self.index_dtype)
         else:
-            word_ids = np.zeros(len(tokens), dtype=np.int32)
+            word_ids = np.zeros(len(tokens), dtype=self.index_dtype)
         for i, token in enumerate(tokens):
             word_ids[i] = self.get_vocabulary_id(token)
         return word_ids
@@ -337,4 +352,4 @@ class Preprocessor:
     def __setstate__(self, state):
         self.__dict__.update(state)
         self._embeddings = np.zeros(
-            (self._vocabulary.size, self._embed_size), dtype=np.float32)
+            (self._vocabulary.size, self._embed_size), dtype=self.embed_dtype)

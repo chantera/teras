@@ -5,7 +5,7 @@ class EmbedIDFunction(
         F.connection.embed_id.EmbedIDFunction):
 
     def __init__(self, ignore_label=None, fixed_weight=False):
-        super(EmbedIDFunction).__init__(ignore_label)
+        super(EmbedIDFunction, self).__init__(ignore_label)
         self.fixed_weight = fixed_weight
 
     def backward(self, inputs, grad_outputs):
