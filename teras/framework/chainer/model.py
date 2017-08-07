@@ -5,13 +5,14 @@ This library includes neural network models implemented with Chainer (v2.0.1)
 import queue
 
 from chainer import __version__ as chainer_version
-from chainer import Chain, ChainList, cuda, initializers, link, Variable
+from chainer import cuda, initializers, link, variable
 import chainer.functions as F
 import chainer.links as L
-from chainer.links.connection.n_step_rnn import (
-    argsort_list_descent, permutate_list)
-from chainer.variable import Parameter
+from chainer.links.connection.n_step_rnn import argsort_list_descent
+from chainer.links.connection.n_step_rnn import permutate_list
 import numpy as np
+
+from teras.framework.chainer import functions as teras_F
 
 
 if chainer_version.startswith('3'):
@@ -20,26 +21,61 @@ else:
     batch_matmul = F.batch_matmul
 
 
-class Embed(ChainList):
+class EmbedID(link.Link):
+    """same as chainer.links.EmbedID except for fixing pretrained weight"""
+
+    ignore_label = None
+
+    def __init__(self, in_size, out_size, initialW=None,
+                 ignore_label=None, fixed_weight=False):
+        super(EmbedID, self).__init__()
+        self.ignore_label = ignore_label
+        self.fixed_weight = fixed_weight
+
+        with self.init_scope():
+            if initialW is None:
+                initialW = initializers.normal.Normal(1.0)
+                self.W = variable.Parameter(initialW, (in_size, out_size))
+            elif fixed_weight:
+                self.W = variable.Variable(initialW, requires_grad=False)
+            else:
+                self.W = variable.Parameter(initialW, (in_size, out_size))
+
+    def __call__(self, x):
+        return teras_F.embed_id(x, self.W, self.ignore_label,
+                                self.fixed_weight)
+
+
+class Embed(link.ChainList):
 
     def __init__(self, *args, dropout=0.0):
         embeds = []
         self.size = 0
-        for i, embeddings in enumerate(args):
-            if type(embeddings) is np.ndarray:
-                vocab_size, embed_size = embeddings.shape
-            elif type(embeddings) is tuple and len(embeddings) == 2:
-                vocab_size, embed_size = embeddings
-                embeddings = None
+        for i, _args in enumerate(args):
+            if isinstance(_args, dict):
+                vocab_size = _args.get('in_size', None)
+                embed_size = _args.get('out_size', None)
+                embeddings = _args.get('initialW', None)
+                if vocab_size is None or embed_size is None:
+                    if embeddings is None:
+                        raise ValueError('embeddings or in_size/out_size '
+                                         'must be specified')
+                    vocab_size, embed_size = embeddings.shape
+                    _args['in_size'] = vocab_size
+                    _args['out_size'] = embed_size
             else:
-                raise ValueError('embeddings must be '
-                                 'np.ndarray or tuple(len=2)')
-            embed = L.EmbedID(
-                in_size=vocab_size,
-                out_size=embed_size,
-                initialW=embeddings,
-            )
-            embeds.append(embed)
+                if isinstance(_args, np.ndarray):
+                    vocab_size, embed_size = _args.shape
+                    embeddings = _args
+                elif isinstance(_args, tuple) and len(embeddings) == 2:
+                    vocab_size, embed_size = _args
+                    embeddings = None
+                else:
+                    raise ValueError('embeddings must be '
+                                     'np.ndarray or tuple(len=2)')
+                _args = {'in_size': vocab_size, 'out_size': embed_size,
+                         'initialW': embeddings}
+            embeds.append(EmbedID(**_args))
             self.size += embed_size
         super(Embed, self).__init__(*embeds)
 
@@ -61,7 +97,7 @@ class Embed(ChainList):
         return hs
 
 
-class MLP(ChainList):
+class MLP(link.ChainList):
 
     def __init__(self, layers):
         assert all(type(layer) == MLP.Layer for layer in layers)
@@ -145,7 +181,7 @@ class BiGRU(L.NStepBiGRU):
         return ys
 
 
-class GlobalAttention(Chain):
+class GlobalAttention(link.Chain):
     """This model has not been updated and tested for Chainer v2.0.0"""
 
     def __init__(self, n_units, score_func='general'):
@@ -168,14 +204,14 @@ class GlobalAttention(Chain):
         for h in F.transpose_sequence(hs[:batch]):
             size = h.shape[0]
             if size < batch:
-                h = F.vstack([h, Variable(
+                h = F.vstack([h, variable.Variable(
                     self.xp.zeros((batch - size, h.shape[1]), dtype='f'))])
             score = self._score_func(x, h)
             e = F.exp(score)
             _sum += e
             alphas += batch_matmul(h, e)
         c = F.reshape(batch_matmul(F.reshape(alphas, (batch, dim)),
-                                     (1 / _sum)), (batch, dim))
+                                   (1 / _sum)), (batch, dim))
         return c
 
     def _score_general(self, x, h):
@@ -257,7 +293,7 @@ class CRF(L.CRF1d):
         return scores, paths
 
 
-class CharCNN(Chain):
+class CharCNN(link.Chain):
 
     def __init__(self, char_embeddings, window_size=3, dropout=0.5):
         super(CharCNN, self).__init__()
@@ -310,10 +346,10 @@ class Biaffine(link.Link):
             shape = (left_size + int(not(self.nobias[0])),
                      right_size + int(not(self.nobias[1])),
                      out_size)
-            self.W = Parameter(
+            self.W = variable.Parameter(
                 initializers._get_initializer(None), shape)
             if not self.nobias[2]:
-                self.b = Parameter(0, (self.out_size,))
+                self.b = variable.Parameter(0, (self.out_size,))
 
     def __call__(self, x1, x2):
         xp = self.xp
