@@ -220,11 +220,15 @@ class Preprocessor(object):
         return (self._preprocess(token) for token in tokens)  # generator
 
     def pad(self, tokens, length):
-        if not isinstance(tokens, np.ndarray):
-            raise ValueError("tokens must be an instance of numpy.ndarray")
-        if length - len(tokens) < 0:
-            raise ValueError("Token length exceeds the specified length value")
-        return _np_pad(tokens, length, self._pad_id, self.index_dtype)
+        if isinstance(tokens, np.ndarray) or len(tokens) < 2:
+            if length - len(tokens) < 0:
+                raise ValueError(
+                    "token length exceeds the specified length value")
+            return _np_pad(tokens, length, self._pad_id, self.index_dtype)
+        else:
+            return np.vstack([
+                _np_pad(array, length, self._pad_id, self.index_dtype)
+                for array in tokens])
 
     def get_vocabulary_id(self, word):
         return self._vocabulary.get(word, self._unknown_id)
