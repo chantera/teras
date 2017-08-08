@@ -1,33 +1,8 @@
-from abc import ABCMeta, abstractmethod
-from collections import UserDict
+from collections import Iterable, UserDict
 import copy
 import re
 
 import numpy as np
-
-
-class Tokenizer(metaclass=ABCMeta):
-
-    @abstractmethod
-    def tokenize(self, document):
-        raise NotImplementedError()
-
-
-class SimpleTokenizer(Tokenizer):
-
-    def tokenize(self, document):
-        return document.split()
-
-
-""" Tokenizer example
-
-from nltk.tokenize import word_tokenize
-
-class NltkTokenizer(Tokenizer)
-
-    def tokenize(self, document):
-        return word_tokenize(document)
-"""
 
 
 class Vocab(UserDict):
@@ -131,6 +106,158 @@ class Vocab(UserDict):
         return default
 
 
+def split(sentence):
+    return sentence.split()
+
+
+def lower(word):
+    return str(word).lower()
+
+
+def replace_number(word):
+    return re.sub(r'^\d+(,\d+)*(\.\d+)?$', '<NUM>', word.lower())
+
+
+def raw(word):
+    return word
+
+
+class Preprocessor(object):
+
+    def __init__(self,
+                 unknown="<UNK>",
+                 pad=None,
+                 tokenizer=split,
+                 preprocess=lower,
+                 index_dtype=np.int32):
+        if not hasattr(self, '_vocabulary'):
+            self._vocabulary = Vocab()
+        if not preprocess:
+            preprocess = raw
+        self.index_dtype = index_dtype
+        self._pad_id = -1 if pad is None \
+            else self._add_vocabulary(preprocess(pad))
+        self._unknown_id = self._add_vocabulary(preprocess(unknown))
+        self._tokenizer = tokenizer
+        self._preprocess = preprocess
+
+    def set_tokenizer(self, tokenizer):
+        self._tokenizer = tokenizer
+
+    def set_preprocess(self, func):
+        self._preprocess = func
+
+    def _add_vocabulary(self, word):
+        return self._vocabulary[word]
+
+    def fit(self, raw_documents):
+        for document in raw_documents:
+            self._fit_each(document)
+        return self
+
+    def _fit_each(self, raw_document):
+        tokens = self._extract_tokens(raw_document)
+        for token in tokens:
+            self._add_vocabulary(token)
+        return self
+
+    def fit_one(self, raw_document):
+        return self._fit_each(raw_document)
+
+    def transform(self, raw_documents, length=None):
+        samples = []
+        for document in raw_documents:
+            samples.append(self._transform_each(document, length))
+        if length:
+            samples = np.array(samples, dtype=self.index_dtype)
+        return samples
+
+    def _transform_each(self, raw_document, length=None):
+        tokens = self._extract_tokens(raw_document)
+        if length is not None:
+            if len(tokens) > length:
+                raise ValueError(
+                    "Token length exceeds the specified length value")
+            word_ids = np.full(length, self._pad_id, dtype=self.index_dtype)
+            for i, token in enumerate(tokens):
+                word_ids[i] = self.get_vocabulary_id(token)
+        else:
+            indices = [self.get_vocabulary_id(token) for token in tokens]
+            word_ids = np.array(indices, dtype=self.index_dtype)
+        return word_ids
+
+    def transform_one(self, raw_document, length=None):
+        return self._transform_each(raw_document, length)
+
+    def _extract_tokens(self, raw_document):
+        if isinstance(raw_document, str):
+            tokens = self._tokenizer(raw_document)
+        elif isinstance(raw_document, Iterable):
+            tokens = raw_document
+        else:
+            raise ValueError(
+                'raw_document must be an instance of str or Iterable')
+        tokens = [self._preprocess(token) for token in tokens]
+        return tokens
+
+    def fit_transform(self, raw_documents, length=None):
+        return self.fit(raw_documents).transform(raw_documents, length)
+
+    def fit_transform_one(self, raw_document, length=None):
+        return \
+            self._fit_each(raw_document)._transform_each(raw_document, length)
+
+    def pad(self, tokens, length):
+        if not isinstance(tokens, np.ndarray):
+            raise ValueError("tokens must be an instance of numpy.ndarray")
+        pad_size = length - tokens.size
+        if pad_size < 0:
+            raise ValueError("Token length exceeds the specified length value")
+        return np.pad(tokens, (0, pad_size),
+                      mode="constant", constant_values=self._pad_id)
+
+    def get_vocabulary_id(self, word):
+        return self._vocabulary.get(word, self._unknown_id)
+
+    @property
+    def vocabulary(self):
+        return self._vocabulary.copy()
+
+    @property
+    def unknown_id(self):
+        return self._unknown_id
+
+    @property
+    def pad_id(self):
+        return self._pad_id
+
+
+def load_embeddings(embed_file, vocab_file=None, dtype=np.float32):
+    vocabulary = Vocab()
+    embeddings = []
+    if vocab_file:
+        with open(embed_file) as ef, open(vocab_file) as vf:
+            for line1, line2 in zip(ef, vf):
+                word = line2.strip()
+                vector = line1.strip().split()
+                if word not in vocabulary:
+                    vocabulary.add(word)
+                    embeddings.append(np.array(vector, dtype=dtype))
+    else:
+        with open(embed_file) as f:
+            lines = f.readlines()
+            index = 0
+            if len(lines[0].strip().split()) <= 2:
+                index = 1  # skip header
+            for line in lines[index:]:
+                cols = line.strip().split()
+                word = cols[0]
+                if word not in vocabulary:
+                    vocabulary.add(word)
+                    embeddings.append(np.array(cols[1:], dtype=dtype))
+    return vocabulary, np.array(embeddings)
+
+
 _default_type = np.float32
 
 
@@ -140,59 +267,54 @@ def _get_int_type(dtype):
     return np.int64 if dtype == 'float64' else np.int32
 
 
-def normal(scale, dim, dtype=_default_type):
-    return np.random.normal(0, scale, dim) \
-        .astype(dtype, copy=False)
+class Initializer(object):
+
+    def __call__(self, shape, dtype=np.float32):
+        raise NotImplementedError
 
 
-def uniform(scale, dim, dtype=_default_type):
-    return np.random.uniform(-1 * scale, 1 * scale, dim) \
-        .astype(dtype, copy=False)
+class Normal(Initializer):
+
+    def __init__(self, scale=1.0):
+        self.scale = scale
+
+    def __call__(self, shape, dtype=np.float32):
+        return np.random.normal(0, self.scale, shape) \
+            .astype(dtype, copy=False)
 
 
-def lower(x):
-    return x
+class Uniform(Initializer):
+
+    def __init__(self, scale=1.0):
+        self.scale = scale
+
+    def __call__(self, shape, dtype=np.float32):
+        return np.random.uniform(-1 * self.scale, 1 * self.scale, shape) \
+            .astype(dtype, copy=False)
 
 
-def replace_number(x):
-    return re.sub(r'^\d+(,\d+)*(\.\d+)?$', '<NUM>', x.lower())
+def standard_normal(shape, dtype=np.float32):
+    return np.random.normal(0, 1, shape).astype(dtype, copy=False)
 
 
-class Preprocessor:
+class EmbeddingPreprocessor(Preprocessor):
 
     def __init__(self,
                  embed_file=None,
                  embed_size=50,
                  unknown="<UNK>",
                  pad=None,
-                 tokenizer=None,
-                 initializer=None,
-                 preprocess=None,
+                 tokenizer=split,
+                 initializer=standard_normal,
+                 preprocess=lower,
                  embed_dtype=np.float32):
         self.embed_dtype = embed_dtype
-        self.index_dtype = _get_int_type(embed_dtype)
         self._init_embeddings(embed_file, embed_size)
-        if initializer:
-            self._initializer = initializer
-        else:
-            self._initializer = lambda: \
-                uniform(1.0, self._embed_size, self.embed_dtype)
-        if pad is not None:
-            self._pad_id = self._add_vocabulary(pad, random=False)
-        else:
-            self._pad_id = -1
-        self._unknown_id = self._add_vocabulary(unknown, random=True)
-        if tokenizer:
-            self._tokenizer = tokenizer
-        else:
-            self._tokenizer = SimpleTokenizer()
-        if preprocess:
-            self._preprocess_token = preprocess
-        else:
-            self._preprocess_token = lower
-
-    def set_preprocess_func(self, func):
-        self._preprocess_token = func
+        super(EmbeddingPreprocessor, self).__init__(
+            unknown, pad, tokenizer, preprocess, _get_int_type(embed_dtype))
+        self._initializer = initializer
+        if not self.use_pretrained and self._pad_id >= 0:
+            self.get_embeddings()[self._pad_id] = 0
 
     def _init_embeddings(self, embed_file, embed_size):
         if embed_file is not None:
@@ -200,128 +322,46 @@ class Preprocessor:
             if isinstance(embed_file, (list, tuple)):
                 embed_file, vocab_file = embed_file
             vocabulary, embeddings = \
-                self._load_embeddings(embed_file, vocab_file, self.embed_dtype)
+                load_embeddings(embed_file, vocab_file, self.embed_dtype)
+            self.use_pretrained = True
             embed_size = embeddings.shape[1]
         elif embed_size is not None:
             if embed_size <= 0 or type(embed_size) is not int:
                 raise ValueError("embed_size must be a positive integer value")
             vocabulary, embeddings = \
                 Vocab(), np.zeros((0, embed_size), self.embed_dtype)
+            self.use_pretrained = False
         else:
             raise ValueError("embed_file os embed_size must be specified")
 
         self._vocabulary = vocabulary
         self._embeddings = embeddings
-        self._new_embeddings = []
+        self._new_words = []
         self._embed_size = embed_size
 
-    @staticmethod
-    def _load_embeddings(embed_file, vocab_file=None, dtype=np.float32):
-        vocabulary = Vocab()
-        embeddings = []
-        if vocab_file:
-            with open(embed_file) as ef, open(vocab_file) as vf:
-                for line1, line2 in zip(ef, vf):
-                    word = line2.strip()
-                    vector = line1.strip().split(" ")
-                    if word not in vocabulary:
-                        vocabulary.add(word)
-                        embeddings.append(np.array(vector, dtype=dtype))
-        else:
-            with open(embed_file) as f:
-                lines = f.readlines()
-                index = 0
-                if len(lines[0].strip().split(" ")) <= 2:
-                    index = 1  # skip header
-                for line in lines[index:]:
-                    cols = line.strip().split(" ")
-                    word = cols[0]
-                    if word not in vocabulary:
-                        vocabulary.add(word)
-                        embeddings.append(np.array(cols[1:], dtype=dtype))
-        return vocabulary, np.array(embeddings)
+    def reset_embeddings(self, embed_size):
+        self._embeddings = self._initializer(
+            (len(self._vocabulary), embed_size), self.embed_dtype)
+        if self._pad_id >= 0:
+            self._embeddings[self._pad_id] = 0
+        self._embed_size = embed_size
+        return self._embeddings
 
-    def _add_vocabulary(self, word, random=True):
-        if word in self._vocabulary:
-            return self._vocabulary[word]
-        index = self._vocabulary[word]
-        if random:
-            # generate a random embedding for an unknown word
-            word_vector = self._initializer()
+    def _add_vocabulary(self, word):
+        if word not in self._vocabulary:
+            index = self._vocabulary[word]
+            self._new_words.append(index)
         else:
-            word_vector = np.zeros(self._embed_size, dtype=self.embed_dtype)
-        self._new_embeddings.append(word_vector)
+            index = self._vocabulary[word]
         return index
 
-    def fit(self, raw_documents, preprocess=True):
-        for document in raw_documents:
-            self._fit_each(document, preprocess)
-        return self
-
-    def _fit_each(self, raw_document, preprocess=True):
-        tokens = self._extract_tokens(raw_document, preprocess)
-        for token in tokens:
-            self._add_vocabulary(token, random=True)
-        return self
-
-    def fit_one(self, raw_document, preprocess=True):
-        return self._fit_each(raw_document, preprocess)
-
-    def transform(self, raw_documents, length=None, preprocess=True):
-        samples = []
-        for document in raw_documents:
-            samples.append(self._transform_each(document, length, preprocess))
-        if length:
-            samples = np.array(samples, dtype=self.index_dtype)
-        return samples
-
-    def _transform_each(self, raw_document, length=None, preprocess=True):
-        tokens = self._extract_tokens(raw_document, preprocess)
-        if length is not None:
-            if len(tokens) > length:
-                raise ValueError(
-                    "Token length exceeds the specified length value")
-            word_ids = np.full(length, self._pad_id, dtype=self.index_dtype)
-        else:
-            word_ids = np.zeros(len(tokens), dtype=self.index_dtype)
-        for i, token in enumerate(tokens):
-            word_ids[i] = self.get_vocabulary_id(token)
-        return word_ids
-
-    def transform_one(self, raw_document, length=None, preprocess=True):
-        return self._transform_each(raw_document, length, preprocess)
-
-    def _extract_tokens(self, raw_document, preprocess=True):
-        if type(raw_document) == list or type(raw_document) == tuple:
-            tokens = raw_document
-        else:
-            tokens = self._tokenizer.tokenize(raw_document)
-        if preprocess:
-            tokens = [self._preprocess_token(token) for token in tokens]
-        return tokens
-
-    def fit_transform(self, raw_documents, length=None, preprocess=True):
-        return self \
-            .fit(raw_documents) \
-            .transform(raw_documents, length, preprocess)
-
-    def fit_transform_one(self, raw_document, length=None, preprocess=True):
-        return self \
-            ._fit_each(raw_document, preprocess) \
-            ._transform_each(raw_document, length, preprocess)
-
-    def pad(self, tokens, length):
-        assert type(tokens) == np.ndarray
-        pad_size = length - tokens.size
-        if pad_size < 0:
-            raise ValueError("Token length exceeds the specified length value")
-        return np.pad(tokens, (0, pad_size),
-                      mode="constant", constant_values=self._pad_id)
-
     def get_embeddings(self):
-        if len(self._new_embeddings) > 0:
-            self._embeddings = np.r_[self._embeddings, self._new_embeddings]
-            self._new_embeddings = []
+        uninitialized_vocab_size = len(self._new_words)
+        if uninitialized_vocab_size > 0:
+            new_vectors = self._initializer(
+                (uninitialized_vocab_size, self._embed_size), self.embed_dtype)
+            self._embeddings = np.r_[self._embeddings, new_vectors]
+            self._new_words = []
         return self._embeddings
 
     def get_vocabulary_id(self, word):
@@ -345,11 +385,12 @@ class Preprocessor:
 
     def __getstate__(self):
         state = self.__dict__.copy()
-        state['_new_embeddings'] = []
+        state['_new_words'] = []
         del state['_embeddings']
         return state
 
     def __setstate__(self, state):
         self.__dict__.update(state)
+        self.reset_embeddings()
         self._embeddings = np.zeros(
             (self._vocabulary.size, self._embed_size), dtype=self.embed_dtype)
