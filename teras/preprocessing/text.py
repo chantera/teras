@@ -156,8 +156,8 @@ class Preprocessor(object):
     def _add_vocabulary(self, word):
         return self._vocabulary[word]
 
-    def fit(self, raw_documents):
-        if isinstance(raw_documents, str):
+    def fit(self, raw_documents, as_one=False):
+        if isinstance(raw_documents, str) or as_one:
             self._fit_each(raw_documents)
         else:
             for document in raw_documents:
@@ -168,8 +168,8 @@ class Preprocessor(object):
         for token in self._extract_tokens(raw_document):
             self._add_vocabulary(token)
 
-    def transform(self, raw_documents, length=None):
-        if isinstance(raw_documents, str):
+    def transform(self, raw_documents, length=None, as_one=False):
+        if isinstance(raw_documents, str) or as_one:
             return self._transform_each(raw_documents, length)
         else:
             samples = [self._transform_each(document, length)
@@ -187,10 +187,11 @@ class Preprocessor(object):
             word_ids = np.array(indices, self.index_dtype)
         return word_ids
 
-    def fit_transform(self, raw_documents, length=None):
-        if isinstance(raw_documents, str):
-            ids = [self._add_vocabulary(token)
-                   for token in self._extract_tokens(raw_documents)]
+    def fit_transform(self, raw_documents, length=None, as_one=False):
+        if isinstance(raw_documents, str) or as_one:
+            ids = np.array([self._add_vocabulary(token)
+                            for token in self._extract_tokens(raw_documents)],
+                           self.index_dtype)
             return _np_pad(ids, length, self._pad_id,
                            self.index_dtype) if length else ids
 
@@ -269,7 +270,7 @@ def load_embeddings(embed_file, vocab_file=None, dtype=np.float32):
                 if word not in vocabulary:
                     vocabulary.add(word)
                     embeddings.append(np.array(cols[1:], dtype=dtype))
-    return vocabulary, np.array(embeddings)
+    return vocabulary, np.vstack(embeddings)
 
 
 _default_type = np.float32

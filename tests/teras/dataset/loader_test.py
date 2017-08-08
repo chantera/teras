@@ -36,21 +36,18 @@ class DataLoader(CorpusLoader):
 
     def map(self, item):
         # item -> (words, postags, (heads, labels))
-        words = []
-        postags = []
-        heads = []
-        labels = []
-        for token in item:
-            words.append(token['form'])
-            postags.append(token['postag'])
-            heads.append(token['head'])
-            labels.append(self.label_map.add(token['deprel']))
-        sample = (self._word_transform(words),
-                  self.get_processor('pos').fit_transform(postags),
+        words, postags, heads, labels = \
+            zip(*[(token['form'],
+                   token['postag'],
+                   token['head'],
+                   self.label_map.add(token['deprel']))
+                  for token in item])
+        sample = (self._word_transform(words, as_one=True),
+                  self.get_processor('pos').fit_transform(
+                      postags, as_one=True),
                   (np.array(heads, dtype=np.int32),
                    np.array(labels, dtype=np.int32)))
-        sentence_id = ':'.join(str(word_id) for word_id in sample[0])
-        self._sentences[sentence_id] = words
+        self._sentences[hash(tuple(sample[0]))] = words
         self._count += 1
         sys.stderr.write("\rload samples: {}".format(self._count))
         sys.stderr.flush()
@@ -67,8 +64,7 @@ class DataLoader(CorpusLoader):
         return super(DataLoader, self).load(file, train, size)
 
     def get_sentence(self, word_ids, default=None):
-        sentence_id = ':'.join(str(word_id) for word_id in word_ids)
-        return self._sentences.get(sentence_id, default)
+        return self._sentences.get(hash(tuple(word_ids)), default)
 
     def __getstate__(self):
         state = self.__dict__.copy()
