@@ -122,6 +122,12 @@ def raw(word):
     return word
 
 
+def _np_pad(x, length, value, dtype=np.int32):
+    y = np.full(length, value, dtype)
+    y[:len(x)] = x[:]
+    return y
+
+
 class Preprocessor(object):
 
     def __init__(self,
@@ -151,43 +157,57 @@ class Preprocessor(object):
         return self._vocabulary[word]
 
     def fit(self, raw_documents):
-        for document in raw_documents:
-            self._fit_each(document)
+        if isinstance(raw_documents, str):
+            self._fit_each(raw_documents)
+        else:
+            for document in raw_documents:
+                self._fit_each(document)
         return self
 
     def _fit_each(self, raw_document):
-        tokens = self._extract_tokens(raw_document)
-        for token in tokens:
+        for token in self._extract_tokens(raw_document):
             self._add_vocabulary(token)
-        return self
-
-    def fit_one(self, raw_document):
-        return self._fit_each(raw_document)
 
     def transform(self, raw_documents, length=None):
-        samples = []
-        for document in raw_documents:
-            samples.append(self._transform_each(document, length))
-        if length:
-            samples = np.array(samples, dtype=self.index_dtype)
-        return samples
+        if isinstance(raw_documents, str):
+            return self._transform_each(raw_documents, length)
+        else:
+            samples = [self._transform_each(document, length)
+                       for document in raw_documents]
+            return np.array(samples, self.index_dtype) if length else samples
 
     def _transform_each(self, raw_document, length=None):
         tokens = self._extract_tokens(raw_document)
         if length is not None:
-            if len(tokens) > length:
-                raise ValueError(
-                    "Token length exceeds the specified length value")
             word_ids = np.full(length, self._pad_id, dtype=self.index_dtype)
             for i, token in enumerate(tokens):
                 word_ids[i] = self.get_vocabulary_id(token)
         else:
             indices = [self.get_vocabulary_id(token) for token in tokens]
-            word_ids = np.array(indices, dtype=self.index_dtype)
+            word_ids = np.array(indices, self.index_dtype)
         return word_ids
 
-    def transform_one(self, raw_document, length=None):
-        return self._transform_each(raw_document, length)
+    def fit_transform(self, raw_documents, length=None):
+        if isinstance(raw_documents, str):
+            ids = [self._add_vocabulary(token)
+                   for token in self._extract_tokens(raw_documents)]
+            return _np_pad(ids, length, self._pad_id,
+                           self.index_dtype) if length else ids
+
+        elif length:
+            return np.vstack([
+                _np_pad(list(map(self._add_vocabulary,
+                                 self._extract_tokens(raw_document))),
+                        length,
+                        self._pad_id,
+                        self.index_dtype)
+                for raw_document in raw_documents])
+        else:
+            return [
+                np.array(list(map(self._add_vocabulary,
+                                  self._extract_tokens(raw_document))),
+                         self.index_dtype)
+                for raw_document in raw_documents]
 
     def _extract_tokens(self, raw_document):
         if isinstance(raw_document, str):
@@ -197,24 +217,14 @@ class Preprocessor(object):
         else:
             raise ValueError(
                 'raw_document must be an instance of str or Iterable')
-        tokens = [self._preprocess(token) for token in tokens]
-        return tokens
-
-    def fit_transform(self, raw_documents, length=None):
-        return self.fit(raw_documents).transform(raw_documents, length)
-
-    def fit_transform_one(self, raw_document, length=None):
-        return \
-            self._fit_each(raw_document)._transform_each(raw_document, length)
+        return (self._preprocess(token) for token in tokens)  # generator
 
     def pad(self, tokens, length):
         if not isinstance(tokens, np.ndarray):
             raise ValueError("tokens must be an instance of numpy.ndarray")
-        pad_size = length - tokens.size
-        if pad_size < 0:
+        if length - len(tokens) < 0:
             raise ValueError("Token length exceeds the specified length value")
-        return np.pad(tokens, (0, pad_size),
-                      mode="constant", constant_values=self._pad_id)
+        return _np_pad(tokens, length, self._pad_id, self.index_dtype)
 
     def get_vocabulary_id(self, word):
         return self._vocabulary.get(word, self._unknown_id)
