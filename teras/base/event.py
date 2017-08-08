@@ -115,6 +115,9 @@ class EventSender(object):
                     self.remove_hook(event, callback.get_handler(event))
             del self._callbacks[callback.name]
 
+    def get_callback(self, name):
+        return self._callbacks[name]
+
     @staticmethod
     def check_callback(callback):
         if not isinstance(callback, Callback):

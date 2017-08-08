@@ -39,6 +39,9 @@ class Reporter(Callback):
     def get_history(self):
         return self._history
 
+    def on_train_begin(self, data):
+        self._history = []
+
     def on_epoch_train_begin(self, data):
         self._logs = {
             'accuracy': 0.0,
