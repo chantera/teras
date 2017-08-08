@@ -18,12 +18,23 @@ class CorpusLoader(Loader):
         self._train = False
 
     def add_processor(self, name, **kwargs):
-        self._processors[name] = text.Preprocessor(**kwargs)
+        for cls in (text.EmbeddingPreprocessor, text.Preprocessor):
+            try:
+                self._processors[name] = cls(**kwargs)
+                break
+            except TypeError:
+                continue
+        else:
+            raise TypeError('Preprocessor not found for the specified args: {}'
+                            .format(kwargs))
 
     def get_processor(self, name):
         return self._processors[name]
 
     def get_embeddings(self, name):
+        if not isinstance(self._processors[name], text.EmbeddingPreprocessor):
+            raise TypeError('preprocessor[name={}] '
+                            'is not an EmbeddingPreprocessor'.format(name))
         return self._processors[name].get_embeddings()
 
     @abstractmethod
