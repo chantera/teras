@@ -23,6 +23,12 @@ class TestTreeReader(unittest.TestCase):
         self.assertTrue(data[0][0][0] == 'S')
         print(reader.read_tree(FILE1)[0])
 
+    def test_parse(self):
+        data = reader.parse_tree("( (S (NP-SBJ (NNP Mr.) (NNP Vinken) ) (VP (VBZ is) (NP-PRD (NP (NN chairman) ) (PP (IN of) (NP (NP (NNP Elsevier) (NNP N.V.) ) (, ,) (NP (DT the) (NNP Dutch) (VBG publishing) (NN group) ))))) (. .) ))")  # NOQA
+        print(data[0])
+        self.assertTrue(len(data) > 0)
+        self.assertTrue(data[0][0][0] == 'S')
+
 
 if __name__ == "__main__":
     unittest.main()

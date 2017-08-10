@@ -109,6 +109,32 @@ def read_conll(file):
     return ConllReader(file).read()
 
 
+def _parse_tree(text, left_bracket='(', right_bracket=')'):
+    stack = []
+    _buffer = []
+    for line in [text] if isinstance(text, str) else text:
+        line = line.lstrip()
+        if not line:
+            continue
+        for char in line:
+            if char == left_bracket:
+                stack.append([])
+            elif char == ' ' or char == '\n':
+                if _buffer:
+                    stack[-1].append(''.join(_buffer))
+                    _buffer = []
+            elif char == right_bracket:
+                if _buffer:
+                    stack[-1].append(''.join(_buffer))
+                    _buffer = []
+                if len(stack) > 1:
+                    stack[-2].append(stack.pop())
+                else:
+                    yield stack.pop()
+            else:
+                _buffer.append(char)
+
+
 class TreeReader(Reader):
 
     def __init__(self, file=None, left_bracket='(', right_bracket=')'):
@@ -118,30 +144,13 @@ class TreeReader(Reader):
 
     def _get_iterator(self):
         with open(self.file, mode='r') as f:
-            stack = []
-            _buffer = []
-            for line in f:
-                line = line.lstrip()
-                if not line:
-                    continue
-                for char in line:
-                    if char == self.left_bracket:
-                        stack.append([])
-                    elif char == ' ' or char == '\n':
-                        if _buffer:
-                            stack[-1].append(''.join(_buffer))
-                            _buffer = []
-                    elif char == self.right_bracket:
-                        if _buffer:
-                            stack[-1].append(''.join(_buffer))
-                            _buffer = []
-                        if len(stack) > 1:
-                            stack[-2].append(stack.pop())
-                        else:
-                            yield stack.pop()
-                    else:
-                        _buffer.append(char)
+            yield from _parse_tree(f, self.left_bracket, self.right_bracket)
 
 
 def read_tree(file, left_bracket='(', right_bracket=')'):
-    return TreeReader(file, left_bracket, right_bracket).read()
+    with open(file, mode='r') as f:
+        return list(_parse_tree(f, left_bracket, right_bracket))
+
+
+def parse_tree(text, left_bracket='(', right_bracket=')'):
+    return list(_parse_tree(text, left_bracket, right_bracket))
