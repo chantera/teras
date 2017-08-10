@@ -8,6 +8,7 @@ class Reader(Iterator):
         if file is not None:
             self.set_file(file)
         else:
+            self.file = None
             self.reset()
 
     def set_file(self, file):
@@ -102,3 +103,45 @@ class ConllReader(Reader):
                     tokens.append(token)
             if len(tokens) > 1:
                 yield tokens
+
+
+def read_conll(file):
+    return ConllReader(file).read()
+
+
+class TreeReader(Reader):
+
+    def __init__(self, file=None, left_bracket='(', right_bracket=')'):
+        super(TreeReader, self).__init__(file)
+        self.right_bracket = right_bracket
+        self.left_bracket = left_bracket
+
+    def _get_iterator(self):
+        with open(self.file, mode='r') as f:
+            stack = []
+            _buffer = []
+            for line in f:
+                line = line.lstrip()
+                if not line:
+                    continue
+                for char in line:
+                    if char == self.left_bracket:
+                        stack.append([])
+                    elif char == ' ' or char == '\n':
+                        if _buffer:
+                            stack[-1].append(''.join(_buffer))
+                            _buffer = []
+                    elif char == self.right_bracket:
+                        if _buffer:
+                            stack[-1].append(''.join(_buffer))
+                            _buffer = []
+                        if len(stack) > 1:
+                            stack[-2].append(stack.pop())
+                        else:
+                            yield stack.pop()
+                    else:
+                        _buffer.append(char)
+
+
+def read_tree(file, left_bracket='(', right_bracket=')'):
+    return TreeReader(file, left_bracket, right_bracket).read()
