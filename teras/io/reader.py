@@ -58,55 +58,65 @@ class Reader(Iterator):
         self.__dict__.update(state)
 
 
-class ConllReader(Reader):
+def _create_root():
+    root = {
+        'id': 0,
+        'form': "<ROOT>",
+        'lemma': "<ROOT>",
+        'cpostag': "ROOT",
+        'postag':  "ROOT",
+        'feats':   "_",
+        'head': 0,
+        'deprel':  "root",
+        'phead':   "_",
+        'pdeprel': "_",
+    }
+    return root
 
-    def create_root(self):
-        root = {
-            'id': 0,
-            'form': "<ROOT>",
-            'lemma': "<ROOT>",
-            'cpostag': "ROOT",
-            'postag':  "ROOT",
-            'feats':   "_",
-            'head': 0,
-            'deprel':  "root",
-            'phead':   "_",
-            'pdeprel': "_",
-        }
-        return root
+
+def _parse_conll(text):
+    tokens = [_create_root()]
+    for line in [text] if isinstance(text, str) else text:
+        line = line.strip()
+        if not line:
+            if len(tokens) > 1:
+                yield tokens
+                tokens = [_create_root()]
+        elif line.startswith('#'):
+            continue
+        else:
+            cols = line.split("\t")
+            token = {
+                'id': int(cols[0]),
+                'form': cols[1],
+                'lemma': cols[2],
+                'cpostag': cols[3],
+                'postag': cols[4],
+                'feats': cols[5],
+                'head': int(cols[6]),
+                'deprel': cols[7],
+                'phead': cols[8],
+                'pdeprel': cols[9],
+            }
+            tokens.append(token)
+    if len(tokens) > 1:
+        yield tokens
+
+
+class ConllReader(Reader):
 
     def _get_iterator(self):
         with open(self.file, mode='r') as f:
-            tokens = [self.create_root()]
-            for line in f:
-                line = line.strip()
-                if not line:
-                    if len(tokens) > 1:
-                        yield tokens
-                        tokens = [self.create_root()]
-                elif line.startswith('#'):
-                    continue
-                else:
-                    cols = line.split("\t")
-                    token = {
-                        'id': int(cols[0]),
-                        'form': cols[1],
-                        'lemma': cols[2],
-                        'cpostag': cols[3],
-                        'postag': cols[4],
-                        'feats': cols[5],
-                        'head': int(cols[6]),
-                        'deprel': cols[7],
-                        'phead': cols[8],
-                        'pdeprel': cols[9],
-                    }
-                    tokens.append(token)
-            if len(tokens) > 1:
-                yield tokens
+            yield from _parse_conll(f)
 
 
 def read_conll(file):
-    return ConllReader(file).read()
+    with open(file, mode='r') as f:
+        return list(_parse_conll(f))
+
+
+def parse_conll(text):
+    return list(_parse_conll(text))
 
 
 def _parse_tree(text, left_bracket='(', right_bracket=')'):
