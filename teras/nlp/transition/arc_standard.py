@@ -1,6 +1,49 @@
 from enum import IntEnum
 
 
+def projectivize(heads):
+    """https://github.com/tensorflow/models/blob/7d30a017fe50b648be6dee544f8059bde52db562/syntaxnet/syntaxnet/document_filters.cc#L296"""  # NOQA
+    num_tokens = len(heads)
+    while True:
+        left = [-1] * num_tokens
+        right = [num_tokens] * num_tokens
+
+        for i, head in enumerate(heads):
+            l = min(i, head)
+            r = max(i, head)
+            for j in range(l + 1, r):
+                if left[j] < l:
+                    left[j] = l
+                if right[j] > r:
+                    right[j] = r
+
+        deepest_arc = -1
+        max_depth = 0
+        for i, head in enumerate(heads):
+            if head == 0:
+                continue
+            l = min(i, head)
+            r = max(i, head)
+            left_bound = max(left[l], left[r])
+            right_bound = min(right[l], right[r])
+
+            if l < left_bound or r > right_bound:
+                depth = 0
+                j = i
+                while j != 0:
+                    depth += 1
+                    j = heads[j]
+                if depth > max_depth:
+                    deepest_arc = i
+                    max_depth = depth
+
+        if deepest_arc == -1:
+            return True
+
+        lifted_head = heads[heads[deepest_arc]]
+        heads[deepest_arc] = lifted_head
+
+
 class ArcStandard(object):
 
     class ActionType(IntEnum):
@@ -84,7 +127,7 @@ class ArcStandard(object):
 
     @staticmethod
     def is_allowed_shift(state):
-        return not(state.end())
+        return not(state.buffer_empty())
 
     @staticmethod
     def is_allowed_left_arc(state):
@@ -96,7 +139,7 @@ class ArcStandard(object):
 
     @staticmethod
     def is_terminal(state):
-        return state.end() and state.stack_size < 2
+        return state.buffer_empty() and state.stack_size < 2
 
     @staticmethod
     def get_oracle(state):

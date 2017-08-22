@@ -33,9 +33,6 @@ class State:
     def num_tokens(self):
         return self._num_tokens
 
-    def end(self):
-        return self._buffer == self._num_tokens
-
     @property
     def stack_top(self):
         return self._stack[-1]
@@ -62,6 +59,9 @@ class State:
             return -1
         index = self._buffer + position
         return index if index < self._num_tokens else -1
+
+    def buffer_empty(self):
+        return self._buffer >= self._num_tokens
 
     def head(self, index):
         return self._heads[index]
