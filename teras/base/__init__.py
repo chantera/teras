@@ -2,6 +2,14 @@ from abc import ABCMeta, abstractmethod
 from collections.abc import Callable, Mapping
 
 
+class Object(type):
+
+    def __new__(cls, name, bases, namespace):
+        if '__slots__' not in namespace:
+            namespace['__slots__'] = tuple()
+        return type.__new__(cls, name, bases, namespace)
+
+
 class Singleton(metaclass=ABCMeta):
     __instance = None
 

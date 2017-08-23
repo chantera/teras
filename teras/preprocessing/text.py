@@ -239,6 +239,10 @@ class Preprocessor(object):
         return self._vocabulary.copy()
 
     @property
+    def vocabulary_size(self):
+        return self._vocabulary.size
+
+    @property
     def unknown_id(self):
         return self._unknown_id
 
@@ -379,24 +383,9 @@ class EmbeddingPreprocessor(Preprocessor):
             self._new_words = []
         return self._embeddings
 
-    def get_vocabulary_id(self, word):
-        return self._vocabulary.get(word, self._unknown_id)
-
-    @property
-    def vocabulary(self):
-        return self._vocabulary.copy()
-
     @property
     def embeddings(self):
         return self.get_embeddings()
-
-    @property
-    def unknown_id(self):
-        return self._unknown_id
-
-    @property
-    def pad_id(self):
-        return self._pad_id
 
     def __getstate__(self):
         state = self.__dict__.copy()
