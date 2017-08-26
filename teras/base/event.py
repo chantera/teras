@@ -108,12 +108,17 @@ class EventSender(object):
             self._callbacks[callback.name] = callback
 
     def detach_callback(self, callback):
+        if isinstance(callback, str):
+            callback = self.get_callback(callback)
         self.check_callback(callback)
         if callback.name in self._callbacks:
             for event in self.EventClass:
                 if callback.has_handler(event):
                     self.remove_hook(event, callback.get_handler(event))
             del self._callbacks[callback.name]
+
+    def has_callback(self, name):
+        return name in self._callbacks
 
     def get_callback(self, name):
         return self._callbacks[name]
