@@ -89,17 +89,13 @@ class Embed(link.ChainList):
 
         assert dropout == 0 or type(dropout) == float
         self._dropout_ratio = dropout
-        if dropout > 0:
-            self._dropout_func = lambda x, ratio: F.dropout(x, ratio)
-        else:
-            self._dropout_func = lambda x, ratio: x
 
     def __call__(self, *xs):
         hs = []
         batch = len(xs[0])
         for i in range(batch):
-            _hs = F.concat([self._dropout_func(embed(self.xp.array(_xs[i])),
-                                               self._dropout_ratio)
+            _hs = F.concat([teras_F.dropout(embed(self.xp.array(_xs[i])),
+                                            self._dropout_ratio)
                             for _xs, embed in zip(xs, self)])
             hs.append(_hs)
         return hs
@@ -132,17 +128,13 @@ class MLP(link.ChainList):
                 self._activate = activation
             assert dropout == 0 or type(dropout) == float
             self._dropout_ratio = dropout
-            if dropout > 0:
-                self._dropout_func = lambda x, ratio: F.dropout(x, ratio)
-            else:
-                self._dropout_func = lambda x, ratio: x
 
         def __call__(self, x):
             shape = x.shape
             x = F.reshape(x, (-1, shape[-1]))
             y = super(MLP.Layer, self).__call__(x)
             y = F.reshape(y, shape[0:-1] + (-1,))
-            return self._dropout_func(self._activate(y), self._dropout_ratio)
+            return teras_F.dropout(self._activate(y), self._dropout_ratio)
 
 
 class LSTM(L.NStepLSTM):

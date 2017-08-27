@@ -1,3 +1,4 @@
+from chainer import configuration
 import chainer.functions as F
 
 
@@ -20,3 +21,9 @@ def embed_id(x, W, ignore_label=None, fixed_weight=False):
         return EmbedIDFunction(ignore_label, fixed_weight)(x, W)
     else:
         return F.connection.embed_id.EmbedIDFunction(ignore_label)(x, W)
+
+
+def dropout(x, ratio=.5):
+    if configuration.config.train and ratio > .0:
+        return F.noise.dropout.Dropout(ratio)(x)
+    return x
