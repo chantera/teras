@@ -1,10 +1,12 @@
+import os
+
 import chainer
 
 from teras.framework.chainer import callbacks, functions, model, optimizers
 from teras.training.trainer import TrainEvent
 
 __all__ = ['callbacks', 'chainer_train_on', 'chainer_train_off', 'config',
-           'functions', 'model', 'optimizers', 'set_debug',
+           'functions', 'model', 'optimizers', 'set_debug', 'set_seed',
            'set_model_to_device', 'to_device']
 
 
@@ -31,6 +33,12 @@ def chainer_train_on(*args, **kwargs):
 def chainer_train_off(*args, **kwargs):
     chainer.config.train = False
     chainer.config.enable_backprop = False
+
+
+def set_seed(seed):
+    seed = str(seed)
+    os.environ['CHAINER_SEED'] = seed
+    os.environ['CUPY_SEED'] = seed
 
 
 def set_debug(debug):
