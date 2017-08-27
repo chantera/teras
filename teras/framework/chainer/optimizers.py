@@ -12,7 +12,6 @@ class ExponentialDecayAnnealing(object):
     def __call__(self, optimizer):
         self.step += 1
         lr = getattr(optimizer, self.lr_key)
-        print(lr)
         p = self.step / self.decay_step
         if self.staircase:
             p //= 1  # floor
