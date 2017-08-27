@@ -1,6 +1,13 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+try:
+    import _dynet
+    dyparams = _dynet.DynetParams()
+    dyparams.set_mem(2048)
+    dyparams.init()
+except Exception:
+    pass
 import dynet
 
 from teras.app import App, arg
@@ -10,7 +17,6 @@ import teras.framework.dynet.functions as F
 from teras.framework.dynet.model import MLP
 import teras.logging as Log
 from teras.training import Trainer
-from teras.training.event import TrainEvent as Event
 
 
 def train(n_epoch=20,
@@ -47,9 +53,8 @@ def train(n_epoch=20,
     model.init_params(params)
 
     optimizer = dynet.AdamTrainer(
-        params, alpha=0.001, beta_1=0.9, beta_2=0.999, eps=1e-08, edecay=0.0)
-    Log.i('optimizer: Adam(alpha=0.001, beta_1=0.9, beta_2=0.999, '
-          'eps=1e-08, edecay=0.0)')
+        params, alpha=0.001, beta_1=0.9, beta_2=0.999, eps=1e-08)
+    Log.i('optimizer: Adam(alpha=0.001, beta_1=0.9, beta_2=0.999, eps=1e-08)')
 
     def forward(x):
         x = dynet.inputTensor(x.T, batched=True)
@@ -58,8 +63,6 @@ def train(n_epoch=20,
     trainer = Trainer(optimizer, forward, loss_func=F.nll_loss,
                       accuracy_func=F.accuracy)
     trainer.configure(dynet_config)
-    trainer.add_hook(Event.EPOCH_TRAIN_END,
-                     lambda data: optimizer.update_epoch())
     trainer.fit(train_x, train_y,
                 batch_size=batch_size,
                 epochs=n_epoch,
