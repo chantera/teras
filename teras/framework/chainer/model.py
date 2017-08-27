@@ -35,19 +35,10 @@ class EmbedID(link.Link):
         with self.init_scope():
             if initialW is None:
                 initialW = initializers.normal.Normal(1.0)
-                self.W = variable.Parameter(initialW, (in_size, out_size))
-            elif fixed_weight:
-                initializer = initialW
-                if isinstance(initializer, (np.ndarray, cuda.ndarray)):
-                    xp = cuda.get_array_module(initialW)
-                    initializer = initializers.constant.Constant(initializer)
-                else:
-                    xp = np
-                initialW = initializers.generate_array(
-                    initializer, (in_size, out_size), xp)
-                self.W = variable.Variable(initialW, requires_grad=False)
-            else:
-                self.W = variable.Parameter(initialW, (in_size, out_size))
+            self.W = variable.Parameter(initialW, (in_size, out_size))
+            if fixed_weight:
+                self.W._requires_grad = False
+                self.W._node._requires_grad = False
 
     def __call__(self, x):
         return teras_F.embed_id(x, self.W, self.ignore_label,
