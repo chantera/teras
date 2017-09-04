@@ -130,8 +130,13 @@ class MLP(link.ChainList):
 
 class LSTM(L.NStepLSTM):
 
-    def __init__(self, n_layers, in_size, out_size, dropout=0.5):
-        super(LSTM, self).__init__(n_layers, in_size, out_size, dropout)
+    def __init__(self, n_layers, in_size, out_size, dropout=0.5,
+                 initialW=None, initial_bias=None):
+        if chainer_version.startswith('3'):
+            super(LSTM, self).__init__(n_layers, in_size, out_size, dropout,
+                                       initialW, initial_bias)
+        else:
+            super(LSTM, self).__init__(n_layers, in_size, out_size, dropout)
 
     def __call__(self, xs):
         hx, cx = None, None
@@ -141,8 +146,13 @@ class LSTM(L.NStepLSTM):
 
 class BiLSTM(L.NStepBiLSTM):
 
-    def __init__(self, n_layers, in_size, out_size, dropout=0.5):
-        super(BiLSTM, self).__init__(n_layers, in_size, out_size, dropout)
+    def __init__(self, n_layers, in_size, out_size, dropout=0.5,
+                 initialW=None, initial_bias=None):
+        if chainer_version.startswith('3'):
+            super(BiLSTM, self).__init__(n_layers, in_size, out_size, dropout,
+                                         initialW, initial_bias)
+        else:
+            super(BiLSTM, self).__init__(n_layers, in_size, out_size, dropout)
 
     def __call__(self, xs):
         hx, cx = None, None
@@ -152,8 +162,13 @@ class BiLSTM(L.NStepBiLSTM):
 
 class GRU(L.NStepGRU):
 
-    def __init__(self, n_layers, in_size, out_size, dropout=0.5):
-        super(GRU, self).__init__(n_layers, in_size, out_size, dropout)
+    def __init__(self, n_layers, in_size, out_size, dropout=0.5,
+                 initialW=None, initial_bias=None):
+        if chainer_version.startswith('3'):
+            super(GRU, self).__init__(n_layers, in_size, out_size, dropout,
+                                      initialW, initial_bias)
+        else:
+            super(GRU, self).__init__(n_layers, in_size, out_size, dropout)
 
     def __call__(self, xs):
         hx = None
@@ -163,8 +178,13 @@ class GRU(L.NStepGRU):
 
 class BiGRU(L.NStepBiGRU):
 
-    def __init__(self, n_layers, in_size, out_size, dropout=0.5):
-        super(BiGRU, self).__init__(n_layers, in_size, out_size, dropout)
+    def __init__(self, n_layers, in_size, out_size, dropout=0.5,
+                 initialW=None, initial_bias=None):
+        if chainer_version.startswith('3'):
+            super(BiGRU, self).__init__(n_layers, in_size, out_size, dropout,
+                                        initialW, initial_bias)
+        else:
+            super(BiGRU, self).__init__(n_layers, in_size, out_size, dropout)
 
     def __call__(self, xs):
         hx = None
@@ -327,7 +347,8 @@ class Biaffine(link.Link):
     """
 
     def __init__(self, left_size, right_size, out_size,
-                 nobias=(False, False, False)):
+                 nobias=(False, False, False),
+                 initialW=None, initial_bias=None):
         super(Biaffine, self).__init__()
         self.in_sizes = (left_size, right_size)
         self.out_size = out_size
@@ -337,10 +358,16 @@ class Biaffine(link.Link):
             shape = (left_size + int(not(self.nobias[0])),
                      right_size + int(not(self.nobias[1])),
                      out_size)
+            if isinstance(initialW, (np.ndarray, cuda.ndarray)):
+                assert initialW.shape == shape
             self.W = variable.Parameter(
-                initializers._get_initializer(None), shape)
+                initializers._get_initializer(initialW), shape)
             if not self.nobias[2]:
-                self.b = variable.Parameter(0, (self.out_size,))
+                if initial_bias is None:
+                    initial_bias = 0
+                self.b = variable.Parameter(initial_bias, (self.out_size,))
+            else:
+                self.b = None
 
     def __call__(self, x1, x2):
         xp = self.xp
