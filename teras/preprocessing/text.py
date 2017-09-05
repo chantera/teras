@@ -191,7 +191,7 @@ class Preprocessor(object):
                  tokenizer=split,
                  preprocess=lower,
                  vocabulary=None,
-                 min_frequency=0,
+                 min_frequency=1,
                  index_dtype=np.int32):
         if vocabulary is None:
             vocabulary = Vocab()
@@ -201,7 +201,7 @@ class Preprocessor(object):
         self._pad_id = vocabulary[pad] if pad is not None else -1
         self._wrapper = \
             _FrequentVocabWrapper(vocabulary, unknown, min_frequency) \
-            if min_frequency > 0 else _VocabWrapper(vocabulary, unknown)
+            if min_frequency > 1 else _VocabWrapper(vocabulary, unknown)
         self._tokenizer = tokenizer
         self._preprocess = preprocess
         self._min_frequency = min_frequency
@@ -410,7 +410,7 @@ class EmbeddingPreprocessor(Preprocessor):
                  initializer=standard_normal,
                  preprocess=lower,
                  vocabulary=None,
-                 min_frequency=0,
+                 min_frequency=1,
                  embed_dtype=np.float32):
         if embed_file is not None:
             vocab_file = None
