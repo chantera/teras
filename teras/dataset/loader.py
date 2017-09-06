@@ -31,11 +31,11 @@ class CorpusLoader(Loader):
     def get_processor(self, name):
         return self._processors[name]
 
-    def get_embeddings(self, name):
+    def get_embeddings(self, name, normalize=False):
         if not isinstance(self._processors[name], text.EmbeddingPreprocessor):
             raise TypeError('preprocessor[name={}] '
                             'is not an EmbeddingPreprocessor'.format(name))
-        return self._processors[name].get_embeddings()
+        return self._processors[name].get_embeddings(normalize)
 
     @abstractmethod
     def map(self, item):
