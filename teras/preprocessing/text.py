@@ -442,7 +442,8 @@ class EmbeddingPreprocessor(Preprocessor):
             unknown, pad, tokenizer, preprocess,
             vocabulary, min_frequency, _get_int_type(embed_dtype))
         if not self.use_pretrained and self.pad_id >= 0:
-            self.get_embeddings()[self.pad_id] = 0
+            self.get_embeddings()
+            self._embeddings[self._pad_id] = 0
 
     def reset_embeddings(self, embed_size):
         self._embeddings = self._initializer(
@@ -452,18 +453,27 @@ class EmbeddingPreprocessor(Preprocessor):
         self._embed_size = embed_size
         return self._embeddings
 
-    def get_embeddings(self):
+    def get_embeddings(self, normalize=False):
         uninitialized_vocab_size = \
             self.vocabulary_size - self._embeddings.shape[0]
         if uninitialized_vocab_size > 0:
             new_vectors = self._initializer(
                 (uninitialized_vocab_size, self._embed_size), self.embed_dtype)
             self._embeddings = np.r_[self._embeddings, new_vectors]
-        return self._embeddings
-
-    @property
-    def embeddings(self):
-        return self.get_embeddings()
+        if not normalize:
+            embeddings = self._embeddings
+        elif normalize == 'l2':
+            l2 = np.linalg.norm(self._embeddings, axis=1, keepdims=True)
+            l2[l2 == 0] = 1
+            embeddings = self._embeddings / l2
+        elif normalize == 'zscore':
+            mean = np.mean(self._embeddings, axis=1, keepdims=True)
+            std = np.std(self._embeddings, axis=1, keepdims=True)
+            embeddings = (self._embeddings - mean) / std
+        else:
+            raise ValueError('unsupported normalization was specified: {}'
+                             .format(normalize))
+        return embeddings
 
     def __getstate__(self):
         state = self.__dict__.copy()
