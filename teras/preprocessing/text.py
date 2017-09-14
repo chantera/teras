@@ -482,6 +482,4 @@ class EmbeddingPreprocessor(Preprocessor):
 
     def __setstate__(self, state):
         self.__dict__.update(state)
-        self.reset_embeddings()
-        self._embeddings = np.zeros(
-            (self.vocabulary_size, self._embed_size), dtype=self.embed_dtype)
+        self.reset_embeddings(self._embed_size)
