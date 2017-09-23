@@ -1,4 +1,5 @@
 from chainer import __version__ as chainer_version
+from chainer import as_variable
 from chainer import configuration
 import chainer.functions as F
 
@@ -35,5 +36,5 @@ else:
 
 def dropout(x, ratio=.5):
     if configuration.config.train and ratio > .0:
-        return F.noise.dropout.Dropout(ratio)(x)
-    return x
+        return F.noise.dropout.Dropout(ratio).apply((x,))[0]
+    return as_variable(x)
