@@ -220,6 +220,7 @@ class App(AppBase):
         if not App.verbose:
             sys.stdout = sys.stderr = open(os.devnull, 'w')
 
+        logger.v(str(sys.version_info))
         logger.v(str(os.uname()))
         logger.v("sys.argv: %s" % str(sys.argv))
         logger.v("app._config: {}".format(self._config))
