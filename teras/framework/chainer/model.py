@@ -306,7 +306,12 @@ class CRF(L.CRF1d):
 
 class CharCNN(link.Chain):
 
-    def __init__(self, char_embeddings, window_size=3, dropout=0.5):
+    def __init__(self, char_embeddings, pad_id,
+                 out_size=50, window_size=3, dropout=0.5,
+                 nobias=False, initialW=None, initial_bias=None):
+        if window_size % 2 == 0:
+            raise ValueError("window_size must be odd value: '{}' is given"
+                             .format(window_size))
         super(CharCNN, self).__init__()
         char_vocab_size, char_embed_size = char_embeddings.shape
         with self.init_scope():
@@ -317,28 +322,55 @@ class CharCNN(link.Chain):
             )
             self.conv = L.Convolution2D(
                 in_channels=1,
-                out_channels=1,
-                ksize=(1, window_size),
-                stride=(1, 1),
-                pad=(0, int(window_size / 2)),
-                nobias=True,
-                initialW=None,
+                out_channels=out_size,
+                ksize=(window_size, char_embed_size),
+                stride=(1, char_embed_size),
+                pad=(int(window_size / 2), 0),
+                nobias=nobias,
+                initialW=initialW,
+                initial_bias=initial_bias
             )
+        self.out_size = out_size
+        self._pad_id = pad_id
+        self._padding = np.array([pad_id] * int(window_size / 2),
+                                 dtype=np.int32)
         self._dropout = dropout
 
     def __call__(self, chars):
-        if type(chars) == tuple or type(chars) == list:
-            return F.vstack([self.forward_one(_chars) for _chars in chars])
-        return self.forward_one(chars)
-
-    def forward_one(self, chars):
-        x = self.embed(self.xp.array(chars))
+        if not isinstance(chars, (tuple, list)):
+            chars = [chars]
+        char_ids, boundaries = self._create_sequence(chars)
+        x = self.embed(self.xp.array(char_ids))
         x = F.dropout(x, self._dropout)
-        h, w = x.shape
-        C = self.conv(F.reshape(x, (1, 1, h, w)))
-        A = F.max_pooling_2d(C, ksize=(h, 1), stride=None, pad=0)
-        y = F.reshape(A, (w,))
-        return y
+        length, dim = x.shape
+        C = self.conv(F.reshape(x, (1, 1, length, dim)))
+        # C.shape -> (1, out_size, length, 1)
+        C = F.split_axis(F.transpose(F.reshape(C, (self.out_size, length))),
+                         boundaries, axis=0)
+        ys = F.vstack([F.max(matrix, axis=0)  # max over time pooling
+                      for i, matrix in enumerate(C) if i % 2 == 1])
+        # assert len(chars) == ys.shape[0]
+        return ys
+
+    def _create_sequence(self, chars):
+        char_ids = [self._padding]  # pad <BEGIN_OF_WORD>
+        boundary = len(self._padding)
+        boundaries = [boundary]
+        pad_2w = np.concatenate((self._padding, self._padding))
+        pad_2w_length = len(pad_2w)
+        for _chars in chars[:-1]:
+            char_ids.append(_chars)
+            boundary += len(_chars)
+            boundaries.append(boundary)
+            char_ids.append(pad_2w)  # pad <END_OF_WORD> and <BEGIN_OF_WORD>
+            boundary += pad_2w_length
+            boundaries.append(boundary)
+        char_ids.append(chars[-1])
+        boundary += len(chars[-1])
+        boundaries.append(boundary)
+        char_ids.append(self._padding)  # pad <END_OF_WORD>
+        char_ids = np.concatenate(char_ids)
+        return char_ids, boundaries
 
 
 class Biaffine(link.Link):
