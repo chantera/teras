@@ -18,7 +18,7 @@ class EmbedIDFunction(
         return super(EmbedIDFunction).backward(inputs, grad_outputs)
 
 
-if chainer_version.startswith('3'):
+if int(chainer_version[0]) > 2:
     def embed_id(x, W, ignore_label=None, fixed_weight=False):
         if fixed_weight:
             return EmbedIDFunction(ignore_label, fixed_weight) \
