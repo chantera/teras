@@ -325,14 +325,14 @@ class CharCNN(link.Chain):
                 out_channels=out_size,
                 ksize=(window_size, char_embed_size),
                 stride=(1, char_embed_size),
-                pad=(int(window_size / 2), 0),
+                pad=(window_size // 2, 0),
                 nobias=nobias,
                 initialW=initialW,
                 initial_bias=initial_bias
             )
         self.out_size = out_size
         self._pad_id = pad_id
-        self._padding = np.array([pad_id] * int(window_size / 2),
+        self._padding = np.array([pad_id] * (window_size // 2),
                                  dtype=np.int32)
         self._dropout = dropout
 
