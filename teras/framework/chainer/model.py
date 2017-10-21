@@ -15,7 +15,7 @@ import numpy as np
 from teras.framework.chainer import functions as teras_F
 
 
-if chainer_version.startswith('3'):
+if int(chainer_version[0]) > 2:
     batch_matmul = F.matmul
 else:
     batch_matmul = F.batch_matmul
@@ -132,7 +132,7 @@ class LSTM(L.NStepLSTM):
 
     def __init__(self, n_layers, in_size, out_size, dropout=0.5,
                  initialW=None, initial_bias=None):
-        if chainer_version.startswith('3'):
+        if int(chainer_version[0]) > 2:
             super(LSTM, self).__init__(n_layers, in_size, out_size, dropout,
                                        initialW, initial_bias)
         else:
@@ -164,7 +164,7 @@ class GRU(L.NStepGRU):
 
     def __init__(self, n_layers, in_size, out_size, dropout=0.5,
                  initialW=None, initial_bias=None):
-        if chainer_version.startswith('3'):
+        if int(chainer_version[0]) > 2:
             super(GRU, self).__init__(n_layers, in_size, out_size, dropout,
                                       initialW, initial_bias)
         else:
@@ -180,7 +180,7 @@ class BiGRU(L.NStepBiGRU):
 
     def __init__(self, n_layers, in_size, out_size, dropout=0.5,
                  initialW=None, initial_bias=None):
-        if chainer_version.startswith('3'):
+        if int(chainer_version[0]) > 2:
             super(BiGRU, self).__init__(n_layers, in_size, out_size, dropout,
                                         initialW, initial_bias)
         else:
