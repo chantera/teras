@@ -46,10 +46,11 @@ from teras import app
 from teras import base
 from teras import dataset
 from teras import framework
+from teras import io
 from teras import logging
 from teras import preprocessing
 from teras import training
 from teras import utils
 
-__all__ = ['app', 'base', 'dataset', 'framework', 'logging', 'preprocessing',
-           'training', 'utils']
+__all__ = ['app', 'base', 'dataset', 'framework', 'io', 'logging',
+           'preprocessing', 'training', 'utils']
