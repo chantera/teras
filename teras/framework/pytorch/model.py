@@ -6,24 +6,95 @@ from torch.autograd import Variable
 import torch.nn as nn
 
 
+class Embedding(nn.Module):
+
+    def __init__(self, num_embeddings, embedding_dim, padding_idx=None,
+                 max_norm=None, norm_type=2, scale_grad_by_freq=False,
+                 sparse=False, fixed_weight=False):
+        super(Embedding, self).__init__()
+        self.num_embeddings = num_embeddings
+        self.embedding_dim = embedding_dim
+        self.padding_idx = padding_idx
+        self.max_norm = max_norm
+        self.norm_type = norm_type
+        self.scale_grad_by_freq = scale_grad_by_freq
+        if fixed_weight:
+            self.weight = Variable(
+                torch.Tensor(num_embeddings, embedding_dim),
+                requires_grad=False)
+        else:
+            self.weight = nn.Parameter(
+                torch.Tensor(num_embeddings, embedding_dim))
+        self.sparse = sparse
+
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        self.weight.data.normal_(0, 1)
+        if self.padding_idx is not None:
+            self.weight.data[self.padding_idx].fill_(0)
+
+    def forward(self, input):
+        padding_idx = self.padding_idx
+        if padding_idx is None:
+            padding_idx = -1
+        return self._backend.Embedding.apply(
+            input, self.weight,
+            padding_idx, self.max_norm, self.norm_type,
+            self.scale_grad_by_freq, self.sparse
+        )
+
+    def __repr__(self):
+        s = '{name}({num_embeddings}, {embedding_dim}'
+        if self.padding_idx is not None:
+            s += ', padding_idx={padding_idx}'
+        if self.max_norm is not None:
+            s += ', max_norm={max_norm}'
+        if self.norm_type != 2:
+            s += ', norm_type={norm_type}'
+        if self.scale_grad_by_freq is not False:
+            s += ', scale_grad_by_freq={scale_grad_by_freq}'
+        if self.sparse is not False:
+            s += ', sparse=True'
+        s += ')'
+        return s.format(name=self.__class__.__name__, **self.__dict__)
+
+
 class Embed(nn.ModuleList):
 
     def __init__(self, *args, dropout=0.0, padding_idx=None):
         embeds = []
         self.size = 0
-        for i, embeddings in enumerate(args):
-            if type(embeddings) is np.ndarray:
-                vocab_size, embed_size = embeddings.shape
-            elif type(embeddings) is tuple and len(embeddings) == 2:
-                vocab_size, embed_size = embeddings
-                embeddings = None
+        for i, _args in enumerate(args):
+            if isinstance(_args, dict):
+                vocab_size = _args.get('num_embeddings',
+                                       _args.get('in_size', None))
+                embed_size = _args.get('embedding_dim',
+                                       _args.get('out_size', None))
+                embeddings = _args.get('weight',
+                                       _args.get('initialW', None))
+                fixed_weight = _args.get('fixed_weight', False)
+                if vocab_size is None or embed_size is None:
+                    if embeddings is None:
+                        raise ValueError('embeddings or in_size/out_size '
+                                         'must be specified')
+                    vocab_size, embed_size = embeddings.shape
             else:
-                raise ValueError('embeddings must be '
-                                 'np.ndarray or tuple(len=2)')
-            embed = nn.Embedding(
+                fixed_weight = False
+                if isinstance(_args, np.ndarray):
+                    vocab_size, embed_size = _args.shape
+                    embeddings = _args
+                elif isinstance(embeddings, tuple) and len(embeddings) == 2:
+                    vocab_size, embed_size = embeddings
+                    embeddings = None
+                else:
+                    raise ValueError('embeddings must be '
+                                     'np.ndarray or tuple(len=2)')
+            embed = Embedding(
                 num_embeddings=vocab_size,
                 embedding_dim=embed_size,
                 padding_idx=padding_idx,
+                fixed_weight=fixed_weight,
             )
             if embeddings is not None:
                 embed.weight.data.copy_(torch.from_numpy(embeddings))
