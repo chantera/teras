@@ -25,6 +25,7 @@ class Embedding(nn.Module):
         else:
             self.weight = nn.Parameter(
                 torch.Tensor(num_embeddings, embedding_dim))
+        self.fixed_weight = fixed_weight
         self.sparse = sparse
 
         self.reset_parameters()
@@ -43,6 +44,25 @@ class Embedding(nn.Module):
             padding_idx, self.max_norm, self.norm_type,
             self.scale_grad_by_freq, self.sparse
         )
+
+    def _apply(self, fn):
+        for module in self.children():
+            module._apply(fn)
+
+        for param in self._parameters.values():
+            if param is not None:
+                param.data = fn(param.data)
+                if param._grad is not None:
+                    param._grad.data = fn(param._grad.data)
+
+        if self.fixed_weight:
+            self.weight.data = fn(self.weight.data)
+
+        for key, buf in self._buffers.items():
+            if buf is not None:
+                self._buffers[key] = fn(buf)
+
+        return self
 
     def __repr__(self):
         s = '{name}({num_embeddings}, {embedding_dim}'
