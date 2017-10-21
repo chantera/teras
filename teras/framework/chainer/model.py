@@ -148,7 +148,7 @@ class BiLSTM(L.NStepBiLSTM):
 
     def __init__(self, n_layers, in_size, out_size, dropout=0.5,
                  initialW=None, initial_bias=None):
-        if chainer_version.startswith('3'):
+        if int(chainer_version[0]) > 2:
             super(BiLSTM, self).__init__(n_layers, in_size, out_size, dropout,
                                          initialW, initial_bias)
         else:
