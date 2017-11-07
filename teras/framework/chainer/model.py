@@ -2,7 +2,7 @@
 This library includes neural network models implemented with Chainer (v2.0.1)
 """
 
-import queue
+# import queue
 
 from chainer import __version__ as chainer_version
 from chainer import cuda, initializers, link, variable
@@ -236,72 +236,76 @@ class GlobalAttention(link.Chain):
         raise NotImplementedError()
 
 
-class CRF(L.CRF1d):
-    """This model has not been updated and tested for Chainer v2.0.0"""
+class CRF(link.Chain):
 
     def __init__(self, n_label):
-        super(CRF, self).__init__(n_label)
+        super(CRF, self).__init__()
+        with self.init_scope():
+            self.cost = variable.Parameter(0, (n_label, n_label))
 
-    def __call__(self, xs, ys):
+    def __call__(self, xs, ys, reduce='mean'):
         xs = permutate_list(xs, argsort_list_descent(xs), inv=False)
         xs = F.transpose_sequence(xs)
         ys = permutate_list(ys, argsort_list_descent(ys), inv=False)
         ys = F.transpose_sequence(ys)
-        return super(CRF, self).__call__(xs, ys)
+        return F.crf1d(self.cost, xs, ys, reduce)
 
     def argmax(self, xs):
-        xs = permutate_list(xs, argsort_list_descent(xs), inv=False)
+        indices = argsort_list_descent(xs)
+        xs = permutate_list(xs, indices, inv=False)
         xs = F.transpose_sequence(xs)
-        score, path = super(CRF, self).argmax(xs)
+        score, path = F.argmax_crf1d(self.cost, xs)
         path = F.transpose_sequence(path)
+        path = permutate_list(path, indices, inv=True)
+        score = F.permutate(score, indices, inv=True)
         return score, path
 
-    def argnmax(self, xs, n=10):
-        cost = cuda.to_cpu(self.cost.data)
-        xs = permutate_list(xs, argsort_list_descent(xs), inv=False)
-        xs = [cuda.to_cpu(x.data) for x in xs]
-
-        scores = []
-        paths = []
-
-        for _xs in xs:
-            alphas = [_xs[0]]
-            for x in _xs[1:]:
-                alpha = np.max(alphas[-1] + cost, axis=1) + x
-                alphas.append(alpha)
-
-            _scores = []
-            _paths = []
-            _end = len(_xs) - 1
-            buf = n
-
-            c = queue.PriorityQueue()
-            q = queue.PriorityQueue()
-            x = _xs[_end]
-            for i in range(x.shape[0]):
-                q.put((-alphas[_end][i], -x[i], _end,
-                       np.random.random(), np.array([i], np.int32)))
-            while not q.empty() and c.qsize() < n + buf:
-                beta, score, time, r, path = q.get()
-                if time == 0:
-                    c.put((score, r, path))
-                    continue
-                t = time - 1
-                x = _xs[t]
-                for i in range(x.shape[0]):
-                    _trans = score - cost[i, path[-1]]
-                    _beta = -alphas[t][i] + _trans
-                    _score = _trans - x[i]
-                    q.put((_beta, _score, t,
-                           np.random.random(), np.append(path, i)))
-            while not c.empty() and len(_paths) < n:
-                score, r, path = c.get()
-                _scores.append(-score)
-                _paths.append(path[::-1])
-            scores.append(_scores)
-            paths.append(_paths)
-
-        return scores, paths
+    # def argnmax(self, xs, n=10):
+    #     cost = cuda.to_cpu(self.cost.data)
+    #     xs = permutate_list(xs, argsort_list_descent(xs), inv=False)
+    #     xs = [cuda.to_cpu(x.data) for x in xs]
+    #
+    #     scores = []
+    #     paths = []
+    #
+    #     for _xs in xs:
+    #         alphas = [_xs[0]]
+    #         for x in _xs[1:]:
+    #             alpha = np.max(alphas[-1] + cost, axis=1) + x
+    #             alphas.append(alpha)
+    #
+    #         _scores = []
+    #         _paths = []
+    #         _end = len(_xs) - 1
+    #         buf = n
+    #
+    #         c = queue.PriorityQueue()
+    #         q = queue.PriorityQueue()
+    #         x = _xs[_end]
+    #         for i in range(x.shape[0]):
+    #             q.put((-alphas[_end][i], -x[i], _end,
+    #                    np.random.random(), np.array([i], np.int32)))
+    #         while not q.empty() and c.qsize() < n + buf:
+    #             beta, score, time, r, path = q.get()
+    #             if time == 0:
+    #                 c.put((score, r, path))
+    #                 continue
+    #             t = time - 1
+    #             x = _xs[t]
+    #             for i in range(x.shape[0]):
+    #                 _trans = score - cost[i, path[-1]]
+    #                 _beta = -alphas[t][i] + _trans
+    #                 _score = _trans - x[i]
+    #                 q.put((_beta, _score, t,
+    #                        np.random.random(), np.append(path, i)))
+    #         while not c.empty() and len(_paths) < n:
+    #             score, r, path = c.get()
+    #             _scores.append(-score)
+    #             _paths.append(path[::-1])
+    #         scores.append(_scores)
+    #         paths.append(_paths)
+    #
+    #     return scores, paths
 
 
 class CharCNN(link.Chain):
