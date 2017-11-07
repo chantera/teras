@@ -2,12 +2,13 @@ import os
 
 import chainer
 
-from teras.framework.chainer import callbacks, functions, model, optimizers
+from teras.framework.chainer \
+    import callbacks, functions, initializers, model, optimizers
 from teras.training.trainer import TrainEvent
 
 __all__ = ['callbacks', 'chainer_train_on', 'chainer_train_off', 'config',
-           'functions', 'model', 'optimizers', 'set_debug', 'set_seed',
-           'set_model_to_device', 'to_device']
+           'functions', 'initializers', 'model', 'optimizers', 'set_debug',
+           'set_seed', 'set_model_to_device', 'to_device']
 
 
 # hack
