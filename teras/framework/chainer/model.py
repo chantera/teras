@@ -244,9 +244,10 @@ class CRF(link.Chain):
             self.cost = variable.Parameter(0, (n_label, n_label))
 
     def __call__(self, xs, ys, reduce='mean'):
-        xs = permutate_list(xs, argsort_list_descent(xs), inv=False)
+        indices = argsort_list_descent(xs)
+        xs = permutate_list(xs, indices, inv=False)
         xs = F.transpose_sequence(xs)
-        ys = permutate_list(ys, argsort_list_descent(ys), inv=False)
+        ys = permutate_list(ys, indices, inv=False)
         ys = F.transpose_sequence(ys)
         return F.crf1d(self.cost, xs, ys, reduce)
 
