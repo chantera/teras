@@ -1,7 +1,3 @@
-"""
-This library includes neural network models implemented with Chainer (v2.0.1)
-"""
-
 # import queue
 
 from chainer import __version__ as chainer_version
