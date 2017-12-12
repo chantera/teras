@@ -354,7 +354,7 @@ class CharCNN(link.Chain):
                          boundaries, axis=0)
         ys = F.max(F.pad_sequence(
             [matrix for i, matrix in enumerate(C) if i % 2 == 1],
-            padding=-self.xp.inf), axis=1)  # max over time pooling
+            padding=-np.inf), axis=1)  # max over time pooling
         # assert len(chars) == ys.shape[0]
         return ys
 
