@@ -352,8 +352,9 @@ class CharCNN(link.Chain):
         # C.shape -> (1, out_size, length, 1)
         C = F.split_axis(F.transpose(F.reshape(C, (self.out_size, length))),
                          boundaries, axis=0)
-        ys = F.vstack([F.max(matrix, axis=0)  # max over time pooling
-                      for i, matrix in enumerate(C) if i % 2 == 1])
+        ys = F.max(F.pad_sequence(
+            [matrix for i, matrix in enumerate(C) if i % 2 == 1],
+            padding=-self.xp.inf), axis=1)  # max over time pooling
         # assert len(chars) == ys.shape[0]
         return ys
 
