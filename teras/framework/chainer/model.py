@@ -317,7 +317,7 @@ class _CharCNN(link.Chain):
         if window_size % 2 == 0:
             raise ValueError("window_size must be odd value: '{}' is given"
                              .format(window_size))
-        super(CharCNN, self).__init__()
+        super(_CharCNN, self).__init__()
         char_vocab_size, char_embed_size = char_embeddings.shape
         with self.init_scope():
             self.embed = L.EmbedID(
