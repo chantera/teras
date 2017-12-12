@@ -309,7 +309,7 @@ class CRF(link.Chain):
     #     return scores, paths
 
 
-class CharCNN(link.Chain):
+class _CharCNN(link.Chain):
 
     def __init__(self, char_embeddings, pad_id,
                  out_size=50, window_size=3, dropout=0.5,
@@ -379,7 +379,7 @@ class CharCNN(link.Chain):
         return char_ids, boundaries
 
 
-class _CharCNN(CharCNN):
+class CharCNN(_CharCNN):
 
     def __call__(self, chars):
         xp = self.xp
