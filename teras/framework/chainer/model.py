@@ -337,8 +337,8 @@ class CharCNN(link.Chain):
             )
         self.out_size = out_size
         self._pad_id = pad_id
-        self._padding = np.array([pad_id] * (window_size // 2),
-                                 dtype=np.int32)
+        self._pad_width = window_size // 2
+        self._padding = np.array([pad_id] * self._pad_width, dtype=np.int32)
         self._dropout = dropout
 
     def __call__(self, chars):
@@ -377,6 +377,39 @@ class CharCNN(link.Chain):
         char_ids.append(self._padding)  # pad <END_OF_WORD>
         char_ids = np.concatenate(char_ids)
         return char_ids, boundaries
+
+
+class _CharCNN(CharCNN):
+
+    def __call__(self, chars):
+        xp = self.xp
+        if not isinstance(chars, (tuple, list)):
+            chars = [chars]
+        lengths = [len(_chars) for _chars in chars]
+        n_words = len(lengths)
+        pad_width = self._pad_width
+
+        char_ids = F.PadSequence(length=max(lengths) + pad_width,
+                                 padding=self._pad_id).forward(chars)[0]
+        left_pads = xp.full((n_words, pad_width), self._pad_id, xp.int32)
+        char_ids = xp.concatenate((left_pads, char_ids), axis=1)
+        """note: cupy does not have `inf`."""
+        mask = xp.full(char_ids.shape, np.inf)
+        for i, length in enumerate(lengths):
+            mask[i, pad_width:pad_width + length] = 0
+        mask = xp.expand_dims(mask, axis=2)
+
+        xs = self.embed(char_ids)
+        xs = F.dropout(xs, self._dropout)
+        C = self.conv(F.expand_dims(xs, axis=1))
+        C = F.transpose(F.squeeze(C, axis=3), (0, 2, 1))
+        """
+        assert C.shape == (n_words,
+                           pad_width + max(lengths) + pad_width,
+                           self.out_size)
+        """
+        ys = F.max(C - mask, axis=1)
+        return ys
 
 
 class Biaffine(link.Link):
