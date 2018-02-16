@@ -80,7 +80,7 @@ class Reporter(Callback):
 class Saver(Callback):
 
     def __init__(self, model, basename, directory='', context=None,
-                 interval=1, name="saver", **kwargs):
+                 interval=1, save_from=None, name="saver", **kwargs):
         super(Saver, self).__init__(name, **kwargs)
         self._model = model
         self._basename = os.path.join(os.path.expanduser(directory), basename)
@@ -89,6 +89,7 @@ class Saver(Callback):
             raise ValueError("interval must be specified as int value: "
                              "actual('{}')".format(type(interval).__name__))
         self._interval = interval
+        self._save_from = save_from
 
     def on_train_begin(self, data):
         if self._context is not None:
@@ -99,6 +100,8 @@ class Saver(Callback):
 
     def on_epoch_end(self, data):
         epoch = data['epoch']
+        if self._save_from is not None and data['epoch'] < self._save_from:
+            return
         if epoch % self._interval == 0:
             model_file = "{}.{}.pkl".format(self._basename, epoch)
             Log.i("saving the model to {} ...".format(model_file))
