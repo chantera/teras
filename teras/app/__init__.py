@@ -65,7 +65,7 @@ class AppBase(Singleton):
             logging.w(e)
         finally:
             logging.getLogger().finalize()
-            sys.exit(0)
+            # sys.exit(0)
 
     @classmethod
     def _get_instance(cls):
@@ -222,7 +222,7 @@ class App(AppBase):
 
         logger.v(str(sys.version_info))
         logger.v(str(os.uname()))
-        logger.v("sys.argv: %s" % str(sys.argv))
+        logger.i("sys.argv: %s" % str(sys.argv))
         logger.v("app._config: {}".format(self._config))
         logger.i("*** [START] ***")
 
