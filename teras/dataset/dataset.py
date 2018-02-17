@@ -1,3 +1,4 @@
+from collections import defaultdict
 from collections.abc import Sequence
 
 import numpy as np
@@ -98,3 +99,51 @@ class Dataset(Sequence):
     @property
     def n_cols(self):
         return self._n_cols
+
+
+class GroupedDataset(Dataset):
+
+    def make_groups(self, batch_size, column=0):
+        self.make_groups_into(int(np.ceil(len(self) / batch_size)))
+
+    def make_groups_into(self, size, column=0):
+        indices = defaultdict(list)
+        for index, sample in enumerate(self):
+            length = len(sample[column])
+            indices[length].append(index)
+        groups = []
+        n_samples_per_group = int(np.ceil(len(self) / size))
+        group, count = [], 0
+        for length, samples in sorted(indices.items()):
+            for sample in samples:
+                group.append(sample)
+                count += 1
+                if count == n_samples_per_group:
+                    groups.append(group)
+                    group, count = [], 0
+        self._groups = groups
+        assert len(groups) == size
+        self._group_indices = np.arange(size)
+
+    def batch(self, size=-1, shuffle=False, colwise=True):
+        if shuffle:
+            np.random.shuffle(self._group_indices)
+        if colwise:
+            return self._get_col_iterator()
+        else:
+            return self._get_row_iterator()
+
+    def _get_row_iterator(self):
+        iterator = iter(self._group_indices)
+        while True:
+            index = next(iterator)
+            indices = self._groups[index]
+            yield np.take(self._samples, indices, axis=0)
+
+    def _get_col_iterator(self):
+        iterator = iter(self._group_indices)
+        while True:
+            index = next(iterator)
+            indices = self._groups[index]
+            yield tuple(np.take(column, indices, axis=0)
+                        for column in self._columns)

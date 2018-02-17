@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 
-from teras.dataset import Dataset
+from teras.dataset import Dataset, GroupedDataset
 from teras.preprocessing import text
 
 
@@ -44,7 +44,7 @@ class CorpusLoader(Loader):
     def filter(self, item):
         return True
 
-    def load(self, file, train=False, size=None):
+    def load(self, file, train=False, size=None, grouped=False):
         self._train = train
         self._reader.set_file(file)
         if size is None:
@@ -59,4 +59,7 @@ class CorpusLoader(Loader):
                     continue
                 samples.append(self.map(item))
 
-        return Dataset(samples)
+        if grouped:
+            return GroupedDataset(samples)
+        else:
+            return Dataset(samples)
