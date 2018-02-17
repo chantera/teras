@@ -121,6 +121,8 @@ class GroupedDataset(Dataset):
                 if count == n_samples_per_group:
                     groups.append(group)
                     group, count = [], 0
+        if count > 0:
+            groups.append(group)
         self._groups = groups
         assert len(groups) == size
         self._group_indices = np.arange(size)
