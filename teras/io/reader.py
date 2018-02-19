@@ -45,7 +45,7 @@ class Reader(Iterator):
         self._iterator = None
 
     def _get_iterator(self):
-        with open(self.file, mode='r') as f:
+        with open(self.file, mode='r', encoding='utf-8') as f:
             for line in f:
                 yield line.strip()
 
@@ -58,19 +58,40 @@ class Reader(Iterator):
         self.__dict__.update(state)
 
 
-def _create_root():
-    root = {
-        'id': 0,
-        'form': "<ROOT>",
-        'lemma': "<ROOT>",
-        'cpostag': "ROOT",
-        'postag':  "ROOT",
-        'feats':   "_",
-        'head': 0,
-        'deprel':  "root",
-        'phead':   "_",
-        'pdeprel': "_",
-    }
+def _create_root(format='conll'):
+    if format == 'conll':
+        root = {
+            'id': 0,
+            'form': "<ROOT>",
+            'lemma': "<ROOT>",
+            'cpostag': "ROOT",
+            'postag':  "ROOT",
+            'feats':   "_",
+            'head': 0,
+            'deprel':  "root",
+            'phead':   "_",
+            'pdeprel': "_",
+        }
+    elif format == 'conll09':
+        root = {
+            'id': 0,
+            'form': "<ROOT>",
+            'lemma': "<ROOT>",
+            'plemma': "_",
+            'pos': "ROOT",
+            'ppos': "_",
+            'feat': "_",
+            'pfeat': "_",
+            'head': 0,
+            'phead': "_",
+            'deprel': "root",
+            'pdeprel': "_",
+            'fillpred': "_",
+            'pred': "_",
+            'apreds': [],
+        }
+    else:
+        raise ValueError("Format `` is not supported.".format(format))
     return root
 
 
@@ -103,20 +124,69 @@ def _parse_conll(text):
         yield tokens
 
 
+def _parse_conll09(text):
+    tokens = [_create_root(format='conll09')]
+    for line in [text] if isinstance(text, str) else text:
+        line = line.strip()
+        if not line:
+            if len(tokens) > 1:
+                yield tokens
+                tokens = [_create_root(format='conll09')]
+        elif line.startswith('#'):
+            continue
+        else:
+            cols = line.split("\t")
+            token = {
+                'id': int(cols[0]),
+                'form': cols[1],
+                'lemma': cols[2],
+                'plemma': cols[3],
+                'pos': cols[4],
+                'ppos': cols[5],
+                'feat': cols[6],
+                'pfeat': cols[7],
+                'head': int(cols[8]),
+                'phead': cols[9],
+                'deprel': cols[10],
+                'pdeprel': cols[11],
+                'fillpred': cols[12],
+                'pred': cols[13],
+                'apreds': cols[14:],
+            }
+            tokens.append(token)
+    if len(tokens) > 1:
+        yield tokens
+
+
 class ConllReader(Reader):
 
+    def __init__(self, file=None, format='conll'):
+        super().__init__(file)
+        self.format = format
+
     def _get_iterator(self):
-        with open(self.file, mode='r') as f:
-            yield from _parse_conll(f)
+        if self.format == 'conll':
+            parse_func = _parse_conll
+        elif self.format == 'conll09':
+            parse_func = _parse_conll09
+        else:
+            raise ValueError("Format `` is not supported.".format(format))
+        with open(self.file, mode='r', encoding='utf-8') as f:
+            yield from parse_func(f)
 
 
-def read_conll(file):
-    with open(file, mode='r') as f:
-        return list(_parse_conll(f))
+def read_conll(file, format='conll'):
+    with open(file, mode='r', encoding='utf-8') as f:
+        return parse_conll(f, format)
 
 
-def parse_conll(text):
-    return list(_parse_conll(text))
+def parse_conll(text, format='conll'):
+    if format == 'conll':
+        return list(_parse_conll(text))
+    elif format == 'conll09':
+        return list(_parse_conll09(text))
+    else:
+        raise ValueError("Format `` is not supported.".format(format))
 
 
 def _parse_tree(text, left_bracket='(', right_bracket=')'):
@@ -153,12 +223,12 @@ class TreeReader(Reader):
         self.left_bracket = left_bracket
 
     def _get_iterator(self):
-        with open(self.file, mode='r') as f:
+        with open(self.file, mode='r', encoding='utf-8') as f:
             yield from _parse_tree(f, self.left_bracket, self.right_bracket)
 
 
 def read_tree(file, left_bracket='(', right_bracket=')'):
-    with open(file, mode='r') as f:
+    with open(file, mode='r', encoding='utf-8') as f:
         return list(_parse_tree(f, left_bracket, right_bracket))
 
 
