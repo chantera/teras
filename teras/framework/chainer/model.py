@@ -144,11 +144,8 @@ class BiLSTM(L.NStepBiLSTM):
 
     def __init__(self, n_layers, in_size, out_size, dropout=0.5,
                  initialW=None, initial_bias=None):
-        if int(chainer_version[0]) > 2:
-            super(BiLSTM, self).__init__(n_layers, in_size, out_size, dropout,
-                                         initialW, initial_bias)
-        else:
-            super(BiLSTM, self).__init__(n_layers, in_size, out_size, dropout)
+        """chainer does not support arbitrary weight initialization."""
+        super(BiLSTM, self).__init__(n_layers, in_size, out_size, dropout)
 
     def __call__(self, xs):
         hx, cx = None, None
