@@ -10,10 +10,10 @@ from teras.training.event import TrainEvent
 class Trainer(EventSender):
     EventClass = TrainEvent
 
-    def __init__(self, optimizer, model, loss_func, accuracy_func=None):
+    def __init__(self, optimizer, forward, loss_func, accuracy_func=None):
         super(Trainer, self).__init__()
         self._optimizer = optimizer
-        self._model = model
+        self._forward = forward
         self._loss_func = loss_func
         self._acc_func = accuracy_func
         self._initialize()
@@ -75,8 +75,12 @@ class Trainer(EventSender):
 
         self._init_events_on_fit(do_validation, verbose)
 
-        forward = (self._model if callable(self._model)
-                   else self._model.forward)
+        forward = self._forward
+        if not callable(forward):
+            if hasattr(self._forward, 'forward'):
+                forward = self._forward.forward
+            else:
+                raise RuntimeError('`forward` is not callable')
         lossfun = self._loss_func
         convert = (self._converter if callable(self._converter)
                    else lambda x: x)
