@@ -3,7 +3,7 @@ import math
 from teras import logging as Log
 from teras.base.event import EventSender
 from teras.dataset import Dataset
-from teras.training.callbacks import ProgressCallback, Reporter
+from teras.training.callbacks import ProgressCallback, Reporter, report
 from teras.training.event import TrainEvent
 
 
@@ -26,6 +26,7 @@ class Trainer(EventSender):
             optimizer.update()
         self._update = update
         self._converter = None
+        self._reporter = None
 
     def configure(self, config, **kwargs):
         assert isinstance(config, dict)
@@ -89,20 +90,27 @@ class Trainer(EventSender):
 
         self.notify(TrainEvent.TRAIN_BEGIN)
 
-        for epoch in range(1, epochs + 1):
-            epoch_logs = {
-                'epoch': epoch,
-                'size': train_dataset.size,
-            }
-            self.notify(TrainEvent.EPOCH_BEGIN, epoch_logs)
+        def main_loop():
+            for epoch in range(1, epochs + 1):
+                epoch_logs = {
+                    'epoch': epoch,
+                    'size': train_dataset.size,
+                }
+                self.notify(TrainEvent.EPOCH_BEGIN, epoch_logs)
 
-            self._process(forward, train_dataset, lossfun,
-                          convert, batch_size, epoch_logs)
-            if do_validation:
-                self._process(forward, val_dataset, lossfun,
-                              convert, batch_size, epoch_logs, train=False)
+                self._process(forward, train_dataset, lossfun,
+                              convert, batch_size, epoch_logs)
+                if do_validation:
+                    self._process(forward, val_dataset, lossfun,
+                                  convert, batch_size, epoch_logs, train=False)
 
-            self.notify(TrainEvent.EPOCH_END, epoch_logs)
+                self.notify(TrainEvent.EPOCH_END, epoch_logs)
+
+        if self._reporter is not None:
+            with self._reporter:
+                main_loop()
+        else:
+            main_loop()
 
         self.notify(TrainEvent.TRAIN_END)
 
@@ -118,24 +126,12 @@ class Trainer(EventSender):
                                    callback.finish_progressbar)
             self.attach_callback(callback, priority=300, update=True)
 
+        self._reporter = Reporter()
+        self.attach_callback(self._reporter, priority=200)
         if self._acc_func is not None:
-            self.attach_callback(Reporter(self._acc_func), priority=200)
-        else:
-            self.add_hook(TrainEvent.EPOCH_TRAIN_END,
-                          lambda data: Log.i(
-                              "[training] epoch {} - "
-                              "#samples: {}, loss: {:.8f}"
-                              .format(data['epoch'],
-                                      data['size'],
-                                      data['loss'])))
-            if do_validation:
-                self.add_hook(TrainEvent.EPOCH_VALIDATE_END,
-                              lambda data: Log.i(
-                                  "[validation] epoch {} - "
-                                  "#samples: {}, loss: {:.8f}"
-                                  .format(data['epoch'],
-                                          data['size'],
-                                          data['loss'])))
+            def _report_accuracy(data):
+                report({"accuracy": self._acc_func(data['ys'], data['ts'])})
+            self.add_hook(TrainEvent.BATCH_END, _report_accuracy)
         self.add_hook(TrainEvent.EPOCH_END, lambda data: Log.v('-'))
 
     def _process(self,

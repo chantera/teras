@@ -28,13 +28,60 @@ class ProgressCallback(Callback):
         self._pbar.finish()
 
 
+_reporters = []
+
+
+def report(values):
+    if _reporters:
+        _reporters[-1].report(values)
+
+
 class Reporter(Callback):
 
-    def __init__(self, accuracy_func, name="reporter", **kwargs):
+    def __init__(self, name="reporter", **kwargs):
         super(Reporter, self).__init__(name, **kwargs)
-        self._acc_func = accuracy_func
         self._logs = {}
+        self._reported = 0
         self._history = []
+
+    def __enter__(self):
+        _reporters.append(self)
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        _reporters.pop()
+
+    def report(self, values):
+        for name, value in values.items():
+            if "accuracy" in name:
+                accuracy = self._logs.get(name, 0.0)
+                if hasattr(value, "__len__") and len(value) == 2:
+                    if isinstance(accuracy, float):
+                        accuracy = [0, 0]
+                    accuracy[0] += value[0]
+                    accuracy[1] += value[1]
+                else:
+                    accuracy += float(accuracy)
+                values[name] = accuracy
+        self._logs.update(values)
+        self._reported += 1
+
+    def get_summary(self):
+        summary = {}
+        for name, value in self._logs.items():
+            if "accuracy" in name:
+                if isinstance(value, list):
+                    correct, total = value[:2]
+                    if total == 0:
+                        import numpy
+                        accuracy = numpy.nan
+                    else:
+                        accuracy = correct / total
+                else:
+                    accuracy = value / self._reported
+                summary[name] = accuracy
+            else:
+                summary[name] = value
+        return summary
 
     def get_history(self):
         return self._history
@@ -43,38 +90,36 @@ class Reporter(Callback):
         self._history = []
 
     def on_epoch_train_begin(self, data):
-        self._logs = {
-            'accuracy': 0.0,
-            'loss': 0.0,
-        }
+        self._logs = {}
+        self._reported = 0
 
     on_epoch_validate_begin = on_epoch_train_begin
 
-    def on_batch_end(self, data):
-        accuracy = self._acc_func(data['ys'], data['ts'])
-        self._logs['accuracy'] += float(accuracy)
-
     def on_epoch_train_end(self, data):
-        metrics = {
-            'accuracy': self._logs['accuracy'] / data['num_batches'],
-            'loss': data['loss']
-        }
-        Log.i("[training] epoch {} - "
-              "#samples: {}, loss: {:.8f}, accuracy: {:.8f}"
-              .format(data['epoch'], data['size'],
-                      metrics['loss'], metrics['accuracy']))
-        self._history.append({'training': metrics, 'validation': None})
+        self.report({'loss': data['loss']})
+        summary = self.get_summary()
+        self._output_log("validation", summary, data)
+        self._history.append({'training': summary, 'validation': None})
 
     def on_epoch_validate_end(self, data):
-        metrics = {
-            'accuracy': self._logs['accuracy'] / data['num_batches'],
-            'loss': data['loss']
-        }
-        Log.i("[validation] epoch {} - "
-              "#samples: {}, loss: {:.8f}, accuracy: {:.8f}"
-              .format(data['epoch'], data['size'],
-                      metrics['loss'], metrics['accuracy']))
-        self._history[-1]['validation'] = metrics
+        self.report({'loss': data['loss']})
+        summary = self.get_summary()
+        self._output_log("validation", summary, data)
+        self._history[-1]['validation'] = summary
+
+    def _output_log(self, label, summary, data):
+        message = "[{}] epoch {} - #samples: {}, loss: {:.8f}".format(
+            label, data['epoch'], data['size'], summary['loss'])
+        if "accuracy" in summary:
+            message += ", accuracy: {:.8f}".format(summary['accuracy'])
+        Log.i(message)
+        message = []
+        for name, value in summary.items():
+            if name == 'loss' or name == 'accuracy':
+                continue
+            message.append("{}: {}".format(name, value))
+        if message:
+            Log.i(", ".join(message))
 
 
 class Saver(Callback):
