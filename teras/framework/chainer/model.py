@@ -382,8 +382,9 @@ class CharCNN(_CharCNN):
         n_words = len(lengths)
         pad_width = self._pad_width
 
-        char_ids = F.PadSequence(length=max(lengths) + pad_width,
-                                 padding=self._pad_id).forward(chars)[0]
+        char_ids = F.array.pad_sequence.PadSequence(
+            length=max(lengths) + pad_width, padding=self._pad_id) \
+            .forward(chars)[0]
         left_pads = xp.full((n_words, pad_width), self._pad_id, xp.int32)
         char_ids = xp.concatenate((left_pads, xp.array(char_ids)), axis=1)
         """note: cupy does not have `inf`."""
