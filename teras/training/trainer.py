@@ -166,6 +166,7 @@ class Trainer(EventSender):
                 'ts': ts,
                 'ys': None,
                 'loss': None,
+                'num_batches': num_batches,
             }
             self.notify(TrainEvent.BATCH_BEGIN, batch_logs)
 

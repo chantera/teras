@@ -98,7 +98,7 @@ class Reporter(Callback):
     def on_epoch_train_end(self, data):
         self.report({'loss': data['loss']})
         summary = self.get_summary()
-        self._output_log("validation", summary, data)
+        self._output_log("training", summary, data)
         self._history.append({'training': summary, 'validation': None})
 
     def on_epoch_validate_end(self, data):
