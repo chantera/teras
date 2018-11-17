@@ -110,14 +110,24 @@ class Reporter(Callback):
     def _output_log(self, label, summary, data):
         message = "[{}] epoch {} - #samples: {}, loss: {:.8f}".format(
             label, data['epoch'], data['size'], summary['loss'])
-        if "accuracy" in summary:
+        if 'accuracy' in summary:
             message += ", accuracy: {:.8f}".format(summary['accuracy'])
+            v = self._logs.get('accuracy', None)
+            if isinstance(v, list) and v[1] > 0:
+                message += " ({}/{})".format(v[0], v[1])
         Log.i(message)
         message = []
         for name, value in summary.items():
             if name == 'loss' or name == 'accuracy':
                 continue
-            message.append("{}: {}".format(name, value))
+            if isinstance(value, float):
+                message.append("{}: {:.8f}".format(name, value))
+            else:
+                message.append("{}: {}".format(name, value))
+            if 'accuracy' in name:
+                v = self._logs.get(name, None)
+                if isinstance(v, list) and v[1] > 0:
+                    message[-1] += " ({}/{})".format(v[0], v[1])
         if message:
             Log.i(", ".join(message))
 
