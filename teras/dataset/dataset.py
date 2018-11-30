@@ -18,7 +18,8 @@ class Dataset(Sequence):
             if isinstance(samples[0], (list, tuple)):
                 columns = tuple(
                     np.array(column)
-                    if isinstance(column[0], np.ndarray) else column
+                    if isinstance(column[0], np.ndarray)
+                    and column[0].ndim <= 1 else column
                     for column in map(tuple, zip(*samples[0])))
                 self._columns = columns
                 self._n_cols = len(columns)
@@ -54,12 +55,19 @@ class Dataset(Sequence):
     def _get_col_iterator(self, batch_size):
         size = len(self)
         offset = 0
+
+        def _take(column, indices):
+            if isinstance(column, (list, tuple)) \
+                    and isinstance(column[0], np.ndarray):
+                return type(column)(column[idx] for idx in indices)
+            else:
+                return np.take(column, indices, axis=0)
+
         while True:
             if offset >= size:
                 raise StopIteration()
             indices = self._indices[offset:offset + batch_size]
-            yield tuple(np.take(column, indices, axis=0)
-                        for column in self._columns)
+            yield tuple(_take(column, indices) for column in self._columns)
             offset += batch_size
 
     def __len__(self):
