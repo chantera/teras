@@ -129,11 +129,12 @@ class App(AppBase):
         App.entry_script = entry_script
         App.entry_point = entry_point
 
-        repo = git.root(entry_point)
-        if repo is not None:
-            App.app_name = os.path.basename(repo) + entry_point[len(repo):]
-        else:
-            App.app_name = App.DEFAULT_APP_NAME
+        app_name = App.DEFAULT_APP_NAME
+        if os.path.exists(entry_point):
+            repo = git.root(entry_point)
+            if repo is not None:
+                app_name = os.path.basename(repo) + entry_point[len(repo):]
+        App.app_name = app_name
 
         App._static_initialized = True
 
