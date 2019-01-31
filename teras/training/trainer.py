@@ -1,90 +1,19 @@
 import math
 
-from .. import logging as Log
-from ..base.event import Callback, Event, EventSender
-from ..dataset import Dataset
-from ..utils.progressbar import ProgressBar
-
-
-class TrainEvent(Event):
-    TRAIN_BEGIN = 'train_begin'
-    TRAIN_END = 'train_end'
-    EPOCH_BEGIN = 'epoch_begin'
-    EPOCH_END = 'epoch_end'
-    EPOCH_TRAIN_BEGIN = 'epoch_train_begin'
-    EPOCH_TRAIN_END = 'epoch_train_end'
-    EPOCH_VALIDATE_BEGIN = 'epoch_validate_begin'
-    EPOCH_VALIDATE_END = 'epoch_validate_end'
-    BATCH_BEGIN = 'batch_begin'
-    BATCH_END = 'batch_end'
-
-
-class ProgressCallback(Callback):
-
-    def __init__(self, name="progress_callback", **kwargs):
-        super(ProgressCallback, self).__init__(name, **kwargs)
-        self._pbar = ProgressBar()
-        self.implement(TrainEvent.EPOCH_TRAIN_BEGIN, self.init_progressbar)
-        self.implement(TrainEvent.BATCH_BEGIN, self.update_progressbar)
-        self.implement(TrainEvent.EPOCH_TRAIN_END, self.finish_progressbar)
-
-    def init_progressbar(self, data):
-        self._pbar.start(data['size'])
-
-    def update_progressbar(self, data):
-        self._pbar.update((data['batch_size'] * data['batch_index']) + 1)
-
-    def finish_progressbar(self, data):
-        self._pbar.finish()
-
-
-class Reporter(Callback):
-
-    def __init__(self, accuracy_func, name="reporter", **kwargs):
-        super(Reporter, self).__init__(name, **kwargs)
-        self._acc_func = accuracy_func
-        self._logs = {}
-        self._history = []
-
-    def get_history(self):
-        return self._history
-
-    def on_epoch_train_begin(self, data):
-        self._logs = {
-            'accuracy': 0.0,
-            'loss': 0.0,
-        }
-
-    on_epoch_validate_begin = on_epoch_train_begin
-
-    def on_batch_end(self, data):
-        accuracy = self._acc_func(data['ys'], data['ts'])
-        self._logs['accuracy'] += accuracy
-
-    def on_epoch_train_end(self, data):
-        metrics = {
-            'accuracy': self._logs['accuracy'] / data['num_batches'],
-            'loss': data['loss']
-        }
-        Log.i("[training] accuracy: {}".format(metrics['accuracy']))
-        self._history.append({'training': metrics, 'validation': None})
-
-    def on_epoch_validate_end(self, data):
-        metrics = {
-            'accuracy': self._logs['accuracy'] / data['num_batches'],
-            'loss': data['loss']
-        }
-        Log.i("[validation] accuracy: {}".format(metrics['accuracy']))
-        self._history[-1]['validation'] = metrics
+from teras import logging as Log
+from teras.base.event import EventSender
+from teras.dataset import Dataset
+from teras.training.callbacks import ProgressCallback, Reporter, report
+from teras.training.event import TrainEvent
 
 
 class Trainer(EventSender):
     EventClass = TrainEvent
 
-    def __init__(self, optimizer, model, loss_func, accuracy_func=None):
+    def __init__(self, optimizer, forward, loss_func, accuracy_func=None):
         super(Trainer, self).__init__()
         self._optimizer = optimizer
-        self._model = model
+        self._forward = forward
         self._loss_func = loss_func
         self._acc_func = accuracy_func
         self._initialize()
@@ -96,64 +25,92 @@ class Trainer(EventSender):
             loss.backward()
             optimizer.update()
         self._update = update
+        self._converter = None
+        self._reporter = None
 
-    def configure(self, config):
+    def configure(self, config, **kwargs):
+        assert isinstance(config, dict)
+        config.update(kwargs)
         if 'update' in config:
-            self._config = config['update']
+            self._update = config['update']
         if 'hooks' in config:
             for event, hook in config['hooks'].items():
                 self.add_hook(event, hook)
         if 'callbacks' in config:
             for callback in config['callbacks']:
                 self.add_callback(callback)
+        if 'converter' in config:
+            self._converter = config['converter']
 
     def fit(self,
             x,
-            y,
+            y=None,
             batch_size=32,
             epochs=10,
             validation_data=None,
             verbose=True):
 
-        train_dataset = Dataset(x, y)
+        if isinstance(x, Dataset):
+            train_dataset = x
+            assert y is None
+        elif y is not None:
+            train_dataset = Dataset(x, y)
+        else:
+            raise ValueError('incomplete input data: x={}, y={}'
+                             .format(type(x), y))
 
         if validation_data:
             do_validation = True
-            if len(validation_data) == 2:
+            if isinstance(validation_data, Dataset):
+                val_dataset = validation_data
+            elif len(validation_data) == 2:
                 val_x, val_y = validation_data
+                val_dataset = Dataset(val_x, val_y)
             else:
                 raise ValueError('When passing validation_data, '
-                                 'it must contain 2 (x_val, y_val) '
-                                 'items, however it contains %d items' %
-                                 len(validation_data))
-            val_dataset = Dataset(val_x, val_y)
+                                 'it must be dataset or contain '
+                                 '2 (x_val, y_val) items: {}'
+                                 .format(type(validation_data)))
         else:
             do_validation = False
 
         self._init_events_on_fit(do_validation, verbose)
 
-        forward = (self._model if callable(self._model)
-                   else self._model.forward())
+        forward = self._forward
+        if not callable(forward):
+            if hasattr(self._forward, 'forward'):
+                forward = self._forward.forward
+            else:
+                raise RuntimeError('`forward` is not callable')
         lossfun = self._loss_func
+        convert = (self._converter if callable(self._converter)
+                   else lambda x: x)
 
         history = []
 
         self.notify(TrainEvent.TRAIN_BEGIN)
 
-        for epoch in range(1, epochs + 1):
-            epoch_logs = {
-                'epoch': epoch,
-                'size': train_dataset.size,
-            }
-            self.notify(TrainEvent.EPOCH_BEGIN, epoch_logs)
+        def main_loop():
+            for epoch in range(1, epochs + 1):
+                epoch_logs = {
+                    'epoch': epoch,
+                    'size': train_dataset.size,
+                }
+                self.notify(TrainEvent.EPOCH_BEGIN, epoch_logs)
 
-            self._process(forward, train_dataset, lossfun,
-                          batch_size, epoch_logs)
-            if do_validation:
-                self._process(forward, val_dataset, lossfun,
-                              batch_size, epoch_logs, train=False)
+                self._process(forward, train_dataset, lossfun,
+                              convert, batch_size, epoch_logs)
+                if do_validation:
+                    self._process(forward, val_dataset, lossfun,
+                                  convert, batch_size, epoch_logs, train=False)
 
-            self.notify(TrainEvent.EPOCH_END, epoch_logs)
+                self.notify(TrainEvent.EPOCH_END, epoch_logs)
+
+        if self._reporter is not None:
+            with self._reporter:
+                main_loop()
+        else:
+            main_loop()
 
         self.notify(TrainEvent.TRAIN_END)
 
@@ -167,32 +124,21 @@ class Trainer(EventSender):
                                    callback.init_progressbar)
                 callback.implement(TrainEvent.EPOCH_VALIDATE_END,
                                    callback.finish_progressbar)
-            self.attach_callback(callback, update=True)
+            self.attach_callback(callback, priority=300, update=True)
 
-        self.add_hook(TrainEvent.EPOCH_TRAIN_END,
-                      lambda data: Log.i(
-                          "[training] epoch {} - "
-                          "#samples: {}, loss: {}"
-                          .format(data['epoch'],
-                                  data['size'],
-                                  data['loss'])))
-        if do_validation:
-            self.add_hook(TrainEvent.EPOCH_VALIDATE_END,
-                          lambda data: Log.i(
-                              "[validation] epoch {} - "
-                              "#samples: {}, loss: {}"
-                              .format(data['epoch'],
-                                      data['size'],
-                                      data['loss'])))
-
+        self._reporter = Reporter()
+        self.attach_callback(self._reporter, priority=200)
         if self._acc_func is not None:
-            self.attach_callback(Reporter(self._acc_func))
+            def _report_accuracy(data):
+                report({"accuracy": self._acc_func(data['ys'], data['ts'])})
+            self.add_hook(TrainEvent.BATCH_END, _report_accuracy)
         self.add_hook(TrainEvent.EPOCH_END, lambda data: Log.v('-'))
 
     def _process(self,
                  forward,
                  dataset,
                  lossfun,
+                 convert,
                  batch_size,
                  logs={}, train=True):
         logs = logs.copy()
@@ -207,7 +153,10 @@ class Trainer(EventSender):
                 dataset.batch(batch_size, colwise=True, shuffle=train)):
             xs, ts = batch[:-1], batch[-1]
             if len(xs) == 1:
-                xs = xs[0]
+                xs = [convert(xs[0])]
+            else:
+                xs = convert(xs)
+            ts = convert(ts)
 
             batch_logs = {
                 'train': train,
@@ -217,15 +166,16 @@ class Trainer(EventSender):
                 'ts': ts,
                 'ys': None,
                 'loss': None,
+                'num_batches': num_batches,
             }
             self.notify(TrainEvent.BATCH_BEGIN, batch_logs)
 
-            ys = forward(xs)
+            ys = forward(*xs)
             loss = lossfun(ys, ts)
 
             batch_logs['ys'] = ys
-            batch_logs['loss'] = loss
-            logs['loss'] += loss
+            batch_logs['loss'] = loss.__float__()
+            logs['loss'] += loss.__float__()
 
             if train:
                 self._update(self._optimizer, loss)

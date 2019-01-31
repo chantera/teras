@@ -1,6 +1,8 @@
 import argparse
+import ast
 from collections import OrderedDict
 from configparser import ConfigParser
+import copy
 import os
 import re
 import sys
@@ -43,7 +45,7 @@ def arg(*args, **kwargs):
 class ArgDefinition(object):
 
     def __init__(self):
-        self._common_cmd_args = {}
+        self._common_cmd_args = OrderedDict()
         self._common_const_args = {}
         self._groups = []
         self._group_cmd_args = {}
@@ -69,7 +71,7 @@ class ArgDefinition(object):
     def def_group(self, group, **kwargs):
         if group not in self._groups:
             self._groups.append(group)
-            self._group_cmd_args[group] = {}
+            self._group_cmd_args[group] = OrderedDict()
             self._group_const_args[group] = {}
             self._group_descriptions[group] = kwargs
         elif kwargs:
@@ -100,6 +102,38 @@ class ArgDefinition(object):
         return self._group_descriptions
 
 
+class ArgumentParser(argparse.ArgumentParser):
+
+    def __init__(self,
+                 prog=None,
+                 usage=None,
+                 description=None,
+                 epilog=None,
+                 parents=[],
+                 formatter_class=argparse.HelpFormatter,
+                 prefix_chars='-',
+                 fromfile_prefix_chars=None,
+                 argument_default=None,
+                 conflict_handler='error',
+                 add_help=True,
+                 allow_abbrev=True):
+        super(ArgumentParser, self).__init__(
+            prog,
+            usage,
+            description,
+            epilog,
+            parents,
+            formatter_class,
+            prefix_chars,
+            fromfile_prefix_chars,
+            argument_default,
+            conflict_handler,
+            add_help,
+            allow_abbrev)
+        self.register('action', 'store_dict', _StoreDictAction)
+        self.register('action', 'store_dict_const', _StoreDictConstAction)
+
+
 class ArgParser(object):
     DEFAULT_FORMATTER_CLASS = argparse.ArgumentDefaultsHelpFormatter
 
@@ -124,10 +158,10 @@ class ArgParser(object):
         grouped = len(self._def.groups) > 1
 
         if command is not None:
-            if command not in self._args.groups:
+            if command not in self._def.groups:
                 raise ValueError("Undefined command is specified.")
             if grouped:
-                args = [command].extend(args)  # specify command
+                args = [command] + args  # specify command
 
         _def = self._def
         parsed_args = vars(parser.parse_args(args))
@@ -156,7 +190,7 @@ class ArgParser(object):
         formatter_class = argparse.HelpFormatter
         if 'formatter_class' in kwargs:
             formatter_class = kwargs['formatter_class']
-        parser = argparse.ArgumentParser(**kwargs)
+        parser = ArgumentParser(**kwargs)
 
         for name, value in _def.common_cmd_args.items():
             parser.add_argument(*value.args, **value.kwargs)
@@ -204,7 +238,7 @@ class ConfigArgParser(ArgParser):
         if parser is not None:
             return super(ConfigArgParser, self).parse(args, parser, command)
 
-        parser = argparse.ArgumentParser(add_help=False)
+        parser = ArgumentParser(add_help=False)
         parser.add_argument('--config',
                             type=str,
                             default=self._default_config_file,
@@ -223,7 +257,7 @@ class ConfigArgParser(ArgParser):
             self._config = self._read_config(config_file, groups,
                                              section_prefix)
             self._source = config_file
-        elif config_file != self._default_config_file:
+        elif config_file != os.path.expanduser(self._default_config_file):
             raise FileNotFoundError("config file was not found: "
                                     "'%s'" % config_file)
 
@@ -248,7 +282,7 @@ class ConfigArgParser(ArgParser):
             prefix = ''
 
         config = {}
-        parser = ConfigParser()
+        parser = ConfigParser(allow_no_value=True)
         parser.read(os.path.expanduser(file))
         if ConfigArgParser._DEBUG:
             print("config file loaded: {}".format(file), file=sys.stderr)
@@ -291,7 +325,7 @@ class ConfigArgParser(ArgParser):
         if prefix is None:
             prefix = ''
 
-        parser = ConfigParser()
+        parser = ConfigParser(allow_no_value=True)
         file = os.path.expanduser(file)
         if ConfigArgParser._DEBUG or True:
             print("write config to file: {}".format(file), file=sys.stderr)
@@ -311,12 +345,17 @@ class ConfigArgParser(ArgParser):
 
     @staticmethod
     def _cast_value(value, def_arg):
-        if 'type' in def_arg.kwargs:
-            _type = def_arg.kwargs['type']
-            value = _type(value) if _type is not bool else _getboolean(value)
-        elif 'default' in def_arg.kwargs:
-            _type = type(def_arg.kwargs['default'])
-            value = _type(value) if _type is not bool else _getboolean(value)
+        if 'type' in def_arg.kwargs or 'default' in def_arg.kwargs:
+            _type = (def_arg.kwargs['type'] if 'type' in def_arg.kwargs
+                     else type(def_arg.kwargs['default']))
+            if _type is dict:
+                value = ast.literal_eval(value)
+            elif _type is bool:
+                value = _getboolean(value)
+            elif _type is str and len(value) == 0:
+                value = def_arg.kwargs.get('default', None)
+            else:
+                value = _type(value)
         elif re.match(r"^(?:true|false)$", value, re.IGNORECASE):
             value = _getboolean(value)
         elif re.match(r"^\d+$", value):
@@ -340,3 +379,80 @@ _BOOLEAN_STATES = {'1': True, 'yes': True, 'true': True, 'on': True,
 
 def _getboolean(value):
     return _BOOLEAN_STATES[value.lower()]
+
+
+def _strtovalue(value):
+    if re.match(r"^\d+$", value):
+        return int(value)
+    elif re.match(r"^\d*\.\d+$", value):
+        return float(value)
+    elif value.lower() in _BOOLEAN_STATES:
+        return _getboolean(value)
+    else:
+        return value
+
+
+class _StoreDictAction(argparse.Action):
+
+    def __init__(self,
+                 option_strings,
+                 dest,
+                 nargs=None,
+                 const=None,
+                 default=None,
+                 type=None,
+                 choices=None,
+                 required=False,
+                 help=None,
+                 metavar=None):
+        if nargs == 0:
+            raise ValueError('nargs for append actions must be > 0')
+        if const is not None and nargs != argparse.OPTIONAL:
+            raise ValueError('nargs must be %r to supply const'
+                             % argparse.OPTIONAL)
+        super(_StoreDictAction, self).__init__(
+            option_strings=option_strings,
+            dest=dest,
+            nargs=nargs,
+            const=const,
+            default=default,
+            type=type,
+            choices=choices,
+            required=required,
+            help=help,
+            metavar=metavar)
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        items = copy.copy(argparse._ensure_value(namespace, self.dest, {}))
+        for kv in values.split(','):
+            k, v = kv.split('=')
+            items[k] = _strtovalue(v)
+        setattr(namespace, self.dest, items)
+
+
+class _StoreDictConstAction(argparse.Action):
+
+    def __init__(self,
+                 option_strings,
+                 dest,
+                 const,
+                 default=None,
+                 required=False,
+                 help=None,
+                 metavar=None):
+        super(_StoreDictConstAction, self).__init__(
+            option_strings=option_strings,
+            dest=dest,
+            nargs=0,
+            const=const,
+            default=default,
+            required=required,
+            help=help,
+            metavar=metavar)
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        items = copy.copy(argparse._ensure_value(namespace, self.dest, {}))
+        for kv in values.split(','):
+            k, v = kv.split('=')
+            items[k] = _strtovalue(v)
+        setattr(namespace, self.dest, items)

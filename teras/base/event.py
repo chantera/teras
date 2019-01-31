@@ -75,13 +75,17 @@ class EventSender(object):
 
     def __init__(self):
         self._hooks = {}
+        self._priorities = {}
         self._callbacks = {}
 
-    def add_hook(self, event, hook):
+    def add_hook(self, event, hook, priority=100):
+        self._priorities[(event, hook)] = priority
         if event not in self._hooks:
             self._hooks[event] = [hook]
         elif hook not in self._hooks[event]:
             self._hooks[event].append(hook)
+            self._hooks[event].sort(
+                key=lambda x: self._priorities[(event, x)], reverse=True)
 
     def notify(self, event, data=None):
         if event in self._hooks:
@@ -91,24 +95,33 @@ class EventSender(object):
     def remove_hook(self, event, hook):
         if event in self._hooks and hook in self._hooks[event]:
             self._hooks[event].remove(hook)
+            del self._hooks[(event, hook)]
 
-    def attach_callback(self, callback, update=False):
+    def attach_callback(self, callback, priority=100, update=False):
         self.check_callback(callback)
         if update:
             self.detach_callback(callback)
         if callback.name not in self._callbacks:
             for event in self.EventClass:
                 if callback.has_handler(event):
-                    self.add_hook(event, callback.get_handler(event))
+                    self.add_hook(event, callback.get_handler(event), priority)
             self._callbacks[callback.name] = callback
 
     def detach_callback(self, callback):
+        if isinstance(callback, str):
+            callback = self.get_callback(callback)
         self.check_callback(callback)
         if callback.name in self._callbacks:
             for event in self.EventClass:
                 if callback.has_handler(event):
                     self.remove_hook(event, callback.get_handler(event))
             del self._callbacks[callback.name]
+
+    def has_callback(self, name):
+        return name in self._callbacks
+
+    def get_callback(self, name):
+        return self._callbacks[name]
 
     @staticmethod
     def check_callback(callback):

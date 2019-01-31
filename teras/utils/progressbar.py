@@ -10,8 +10,8 @@ class ProgressBar(object):
         self._pbar = None
 
     def start(self, max_value):
-        self._pbar = \
-            PBar(min_value=0, max_value=max_value, fd=self._fd).start()
+        self._pbar = PBar(min_value=0, max_value=max_value, fd=self._fd)
+        self._pbar.update(0, force=True)
 
     def update(self, count):
         self._pbar.update(count)

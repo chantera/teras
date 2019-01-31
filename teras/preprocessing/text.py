@@ -1,367 +1,485 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-
-from abc import ABCMeta, abstractmethod
-from collections.abc import Iterable, Iterator, Sequence
-from operator import itemgetter
+from collections import defaultdict, Iterable, UserDict
+import copy
 import re
+import warnings
 
 import numpy as np
 
 
-class Tokenizer(metaclass=ABCMeta):
+class Vocab(UserDict):
 
-    @abstractmethod
-    def tokenize(self, document):
-        raise NotImplementedError()
+    def __init__(self):
+        super(Vocab, self).__init__()
+        self._index = -1
+        self._id2word = {}
 
+    def get(self, key, default=None):
+        if key in self:
+            return self[key]
+        return default
 
-class SimpleTokenizer(Tokenizer):
+    def add(self, key):
+        return self[key]
 
-    def tokenize(self, document):
-        return document.split()
+    def __missing__(self, key):
+        self._index = idx = self._index + 1
+        self.data[key] = idx
+        self._id2word[idx] = key
+        return idx
 
+    def __setitem__(self, key, item):
+        if not isinstance(item, int):
+            raise ValueError("item must be int, but {} given"
+                             .format(type(item)))
+        if self._id2word.get(item, key) != key:
+            raise ValueError("item has already been assigned "
+                             "to another key".format(type(item)))
+        if key in self.data:
+            del self._id2word[self.data[key]]
+        self.data[key] = item
+        self._id2word[item] = key
+        if item > self._index:
+            self._index = item
 
-""" Tokenizer example
+    def __delitem__(self, key):
+        del self._id2word[self.data.pop(key)]
 
-from nltk.tokenize import word_tokenize
+    def copy(self):
+        data = self.data
+        id2word = self._id2word
+        try:
+            self.data = {}
+            self._id2word = {}
+            c = copy.copy(self)
+        finally:
+            self.data = data
+            self._id2word = id2word
+        c.update(data)
+        return c
 
-class NltkTokenizer(Tokenizer)
-
-    def tokenize(self, document):
-        return word_tokenize(document)
-"""
-
-
-class Preprocessor:
-
-    def __init__(self,
-                 embed_file=None,
-                 embed_size=50,
-                 unknown="<UNK>",
-                 tokenizer=None):
-        self._init_embeddings(embed_file, embed_size)
-        self._unknown_id = self._add_vocabulary(unknown, random=False)
-        self._pad_id = -1
-        if tokenizer:
-            self._tokenizer = tokenizer
-        else:
-            self._tokenizer = SimpleTokenizer()
-
-    def _init_embeddings(self, embed_file, embed_size):
-        if embed_file is not None:
-            vocab_file = None
-            if isinstance(embed_file, (list, tuple)):
-                embed_file, vocab_file = embed_file
-            vocabulary, embeddings = self._load_embeddings(embed_file, vocab_file)
-            embed_size = embeddings.shape[1]
-        elif embed_size is not None:
-            if embed_size <= 0 or type(embed_size) is not int:
-                raise ValueError("embed_size must be a positive integer value")
-            vocabulary, embeddings = {}, np.zeros((0, embed_size), np.float32)
-        else:
-            raise ValueError("embed_file os embed_size must be specified")
-
-        self._vocabulary = vocabulary
-        self._embeddings = embeddings
-        self._new_embeddings = []
-        self._embed_size = embed_size
-
-    @staticmethod
-    def _load_embeddings(embed_file, vocab_file=None):
-        vocabulary = {}
-        embeddings = []
-        if vocab_file:
-            with open(embed_file) as ef, open(vocab_file) as vf:
-                for line1, line2 in zip(ef, vf):
-                    word = line2.strip()
-                    vector = line1.strip().split(" ")
-                    if word not in vocabulary:
-                        vocabulary[word] = len(vocabulary)
-                        embeddings.append(np.array(vector, dtype=np.float32))
-        else:
-            with open(embed_file) as f:
-                lines = f.readlines()
-                index = 0
-                if len(lines[0].strip().split(" ")) <= 2:
-                    index = 1  # skip header
-                for line in lines[index:]:
-                    cols = line.strip().split(" ")
-                    word = cols[0]
-                    if word not in vocabulary:
-                        vocabulary[word] = len(vocabulary)
-                        embeddings.append(np.array(cols[1:], dtype=np.float32))
-        return vocabulary, np.array(embeddings)
-
-    def _add_vocabulary(self, word, random=True):
-        if word in self._vocabulary:
-            return self._vocabulary[word]
-        index = len(self._vocabulary)
-        self._vocabulary[word] = index
-        if random:
-            word_vector = np.random.uniform(-1, 1, self._embed_size)  # generate a random embedding for an unknown word
-        else:
-            word_vector = np.zeros(self._embed_size, dtype=np.float32)
-        self._new_embeddings.append(word_vector)
-        return index
-
-    def fit(self, raw_documents, preprocess=True):
-        for document in raw_documents:
-            self._fit_each(document, preprocess)
+    @classmethod
+    def fromkeys(cls, iterable):
+        self = cls()
+        for idx, key in enumerate(iterable):
+            self.data[key] = idx
+            self._id2word[idx] = key
+        self._index = idx
         return self
 
-    def _fit_each(self, raw_document, preprocess=True):
-        tokens = self._extract_tokens(raw_document, preprocess)
-        for token in tokens:
-            if token not in self._vocabulary:
-                self._add_vocabulary(token, random=True)
-        return self
-
-    def fit_one(self, raw_document, preprocess=True):
-        return self._fit_each(raw_document, preprocess)
-
-    def transform(self, raw_documents, length=None, preprocess=True):
-        samples = []
-        for document in raw_documents:
-            samples.append(self._transform_each(document, length, preprocess))
-        if length:
-            samples = np.array(samples, dtype=np.int32)
-        return samples
-
-    def _transform_each(self, raw_document, length=None, preprocess=True):
-        tokens = self._extract_tokens(raw_document, preprocess)
-        if length is not None:
-            if len(tokens) > length:
-                raise ValueError("Token length exceeds the specified length value")
-            word_ids = np.full(length, self._pad_id, dtype=np.int32)
-        else:
-            word_ids = np.zeros(len(tokens), dtype=np.int32)
-        for i, token in enumerate(tokens):
-            word_ids[i] = self._vocabulary.get(token, self._unknown_id)
-        return word_ids
-
-    def transform_one(self, raw_document, length=None, preprocess=True):
-        return self._transform_each(raw_document, length, preprocess)
-
-    def _extract_tokens(self, raw_document, preprocess=True):
-        if type(raw_document) == list or type(raw_document) == tuple:
-            tokens = raw_document
-        else:
-            tokens = self._tokenizer.tokenize(raw_document)
-        if preprocess:
-            tokens = [self._preprocess_token(token) for token in tokens]
-        return tokens
-
-    @staticmethod
-    def _preprocess_token(token):
-        return re.sub(r'^\d+(,\d+)*(\.\d+)?$', '<NUM>', token.lower())
-
-    def fit_transform(self, raw_documents, length=None, preprocess=True):
-        return self.fit(raw_documents).transform(raw_documents, length, preprocess)
-
-    def fit_transform_one(self, raw_document, length=None, preprocess=True):
-        return self._fit_each(raw_document, preprocess)._transform_each(raw_document, length, preprocess)
-
-    def pad(self, tokens, length):
-        assert type(tokens) == np.ndarray
-        pad_size = length - tokens.size
-        if pad_size < 0:
-            raise ValueError("Token length exceeds the specified length value")
-        return np.pad(tokens, (0, pad_size), mode="constant", constant_values=self._pad_id)
-
-    def get_embeddings(self):
-        if len(self._new_embeddings) > 0:
-            self._embeddings = np.r_[self._embeddings, self._new_embeddings]
-            self._new_embeddings = []
-        return self._embeddings
-
-    def get_vocabulary_id(self, word):
-        return self._vocabulary.get(word, -1)
+    def lookup(self, value):
+        return self._id2word[value]
 
     @property
-    def embeddings(self):
-        return self.get_embeddings()
+    def size(self):
+        return self._index + 1
+
+    __marker = object()
+
+    def pop(self, key, default=__marker):
+        if key in self:
+            result = self[key]
+            del self[key]
+            return result
+        if default is self.__marker:
+            raise KeyError(key)
+        return default
+
+    def popitem(self):
+        result = self.data.popitem()
+        del self._id2word[result[1]]
+        return result
+
+    def clear(self):
+        self.data.clear()
+        self._id2word.clear()
+        self._index = -1
+
+    def update(self, *args, **kwargs):
+        d = dict()
+        d.update(*args, **kwargs)
+        for k, v in d.items():
+            self[k] = v
+
+    def setdefault(self, key, default=-1):
+        if key in self:
+            return self[key]
+        self[key] = default
+        return default
+
+
+class _VocabWrapper(object):
+
+    def __init__(self, vocabulary, unknown):
+        self._vocabulary = vocabulary
+        self._unknown_id = self._vocabulary[unknown]
+
+    def fit(self, word):
+        self._vocabulary.add(word)
+        return self
+
+    def transform(self, word):
+        return self._vocabulary.get(word, self._unknown_id)
+
+    def fit_transform(self, word):
+        return self._vocabulary.add(word)
+
+    @property
+    def vocabulary(self):
+        return self._vocabulary
 
     @property
     def unknown_id(self):
         return self._unknown_id
 
+
+class _FrequentVocabWrapper(_VocabWrapper):
+
+    def __init__(self, vocabulary, unknown, min_frequency=1):
+        super().__init__(vocabulary, unknown)
+        self._min_frequency = min_frequency
+        self._count = defaultdict(int)
+
+    def fit(self, word):
+        self._count[word] = count = self._count[word] + 1
+        if word not in self._vocabulary and count >= self.min_frequency:
+            self._vocabulary.add(word)
+        return self
+
+    def transform(self, word):
+        if self._count[word] < self._min_frequency:
+            return self._unknown_id
+        return self._vocabulary[word]
+
+    def fit_transform(self, word):
+        self._count[word] = count = self._count[word] + 1
+        if count < self.min_frequency:
+            return self._unknown_id
+        return self._vocabulary[word]
+
+    @property
+    def min_frequency(self):
+        return self._min_frequency
+
+
+def split(sentence):
+    return sentence.split()
+
+
+def lower(word):
+    return str(word).lower()
+
+
+def replace_number(word):
+    return re.sub(r'^\d+(,\d+)*(\.\d+)?$', '<NUM>', word.lower())
+
+
+def raw(word):
+    return word
+
+
+def _np_pad(x, length, value, dtype=np.int32):
+    y = np.full(length, value, dtype)
+    y[:len(x)] = x[:]
+    return y
+
+
+class Preprocessor(object):
+
+    def __init__(self,
+                 unknown="<UNK>",
+                 pad=None,
+                 tokenizer=split,
+                 preprocess=lower,
+                 vocabulary=None,
+                 min_frequency=1,
+                 index_dtype=np.int32):
+        if vocabulary is None:
+            vocabulary = Vocab()
+        if not preprocess:
+            preprocess = raw
+        self.index_dtype = index_dtype
+        self._pad_id = vocabulary[pad] if pad is not None else -1
+        self._wrapper = \
+            _FrequentVocabWrapper(vocabulary, unknown, min_frequency) \
+            if min_frequency > 1 else _VocabWrapper(vocabulary, unknown)
+        self._tokenizer = tokenizer
+        self._preprocess = preprocess
+        self._min_frequency = min_frequency
+
+    def set_tokenizer(self, tokenizer):
+        self._tokenizer = tokenizer
+
+    def set_preprocess(self, func):
+        self._preprocess = func
+
+    def _fit_vocabulary(self, word):
+        self._wrapper.fit(word)
+        return self
+
+    def _tranform_vocabulary(self, word):
+        return self._wrapper.transform(word)
+
+    def _fit_tranform_vocabulary(self, word):
+        return self._wrapper.fit_transform(word)
+
+    def fit(self, raw_documents):
+        if isinstance(raw_documents, str):
+            self.fit_one(raw_documents)
+        else:
+            for document in raw_documents:
+                self.fit_one(document)
+        return self
+
+    def fit_one(self, raw_document):
+        for token in self._extract_tokens(raw_document):
+            self._fit_vocabulary(token)
+        return self
+
+    def transform(self, raw_documents, length=None):
+        if isinstance(raw_documents, str):
+            return self.transform_one(raw_documents, length)
+        else:
+            samples = [self.transform_one(document, length)
+                       for document in raw_documents]
+            return np.array(samples, self.index_dtype) if length else samples
+
+    def transform_one(self, raw_document, length=None):
+        tokens = self._extract_tokens(raw_document)
+        if length is not None:
+            word_ids = np.full(length, self._pad_id, dtype=self.index_dtype)
+            for i, token in enumerate(tokens):
+                word_ids[i] = self._tranform_vocabulary(token)
+        else:
+            indices = [self._tranform_vocabulary(token) for token in tokens]
+            word_ids = np.array(indices, self.index_dtype)
+        return word_ids
+
+    def fit_transform(self, raw_documents, length=None):
+        if isinstance(raw_documents, str):
+            # fit and transform as one instance
+            return self.fit_transform_one(raw_documents, length)
+        elif self._min_frequency > 0:
+            # fit and then transform(
+            return self.fit(raw_documents).transform(raw_documents, length)
+        elif length:
+            # fit and transform simultaneously (with padding)
+            return np.vstack([
+                _np_pad(list(map(self._wrapper.fit_transform,
+                                 self._extract_tokens(raw_document))),
+                        length,
+                        self._pad_id,
+                        self.index_dtype)
+                for raw_document in raw_documents])
+        else:
+            # fit and transform simultaneously (without padding)
+            return [
+                np.array(list(map(self._wrapper.fit_transform,
+                                  self._extract_tokens(raw_document))),
+                         self.index_dtype)
+                for raw_document in raw_documents]
+
+    def fit_transform_one(self, raw_document, length=None):
+        if self._min_frequency > 0:
+            return self.fit_one(raw_document) \
+                .transform_one(raw_document, length)
+        else:
+            ids = np.array([self._wrapper.fit_transform(token)
+                            for token in self._extract_tokens(raw_document)],
+                           self.index_dtype)
+            return _np_pad(ids, length, self._pad_id,
+                           self.index_dtype) if length else ids
+
+    def _extract_tokens(self, raw_document):
+        if isinstance(raw_document, str):
+            tokens = self._tokenizer(raw_document)
+        elif isinstance(raw_document, Iterable):
+            tokens = raw_document
+        else:
+            raise ValueError(
+                'raw_document must be an instance of str or Iterable')
+        return (self._preprocess(token) for token in tokens)  # generator
+
+    def pad(self, tokens, length):
+        if isinstance(tokens, np.ndarray) or len(tokens) < 2:
+            if length - len(tokens) < 0:
+                raise ValueError(
+                    "token length exceeds the specified length value")
+            return _np_pad(tokens, length, self._pad_id, self.index_dtype)
+        else:
+            return np.vstack([
+                _np_pad(array, length, self._pad_id, self.index_dtype)
+                for array in tokens])
+
+    def get_vocabulary_id(self, word):
+        return self._tranform_vocabulary(word)
+
+    @property
+    def vocabulary(self):
+        return self._wrapper.vocabulary.copy()
+
+    @property
+    def vocabulary_size(self):
+        return self._wrapper.vocabulary.size
+
+    @property
+    def unknown_id(self):
+        return self._wrapper.unknown_id
+
     @property
     def pad_id(self):
         return self._pad_id
 
+    @property
+    def min_frequency(self):
+        return self._min_frequency
 
-class Dataset(Sequence):
-    """Immutable Class"""
 
-    def __init__(self, *samples):
-        self._n_cols = len(samples)
-        if self._n_cols == 0:
-            self._samples = []
-            self._n_cols = 1
-            self._dtype = list
-        elif self._n_cols == 1:
-            self._dtype = type(samples[0])
-            if self._dtype is np.ndarray:
-                self._samples = samples[0]
-                self._n_cols = self._samples.shape[0]
-            else:
-                self._samples = list(samples[0])
-                if len(self._samples) > 0 and \
-                        (type(self._samples[0]) is tuple or type(self._samples[0]) is list):
-                    self._n_cols = len(self._samples[0])
-                    self._dtype = type(self._samples[0])
-        elif self._n_cols > 1:
-            self._dtype = type(samples[0])
-            if self._dtype is np.ndarray:
-                self._samples = [_samples for _samples in zip(*samples)]
-            else:
-                self._samples = [self._dtype(_samples) for _samples in zip(*samples)]
-        self._len = len(self._samples)
-        self._indexes = np.arange(self._len)
+def load_embeddings(embed_file, vocab_file=None, dtype=np.float32):
+    vocabulary = Vocab()
+    embeddings = []
+    if vocab_file:
+        with open(embed_file) as ef, open(vocab_file) as vf:
+            for line1, line2 in zip(ef, vf):
+                word = line2.strip()
+                vector = line1.strip().split()
+                if word not in vocabulary:
+                    vocabulary.add(word)
+                    embeddings.append(np.array(vector, dtype=dtype))
+    else:
+        with open(embed_file) as f:
+            lines = f.readlines()
+            index = 0
+            if len(lines[0].strip().split()) <= 2:
+                index = 1  # skip header
+            for line in lines[index:]:
+                cols = line.strip().split()
+                word = cols[0]
+                if word not in vocabulary:
+                    vocabulary.add(word)
+                    embeddings.append(np.array(cols[1:], dtype=dtype))
+    return vocabulary, np.vstack(embeddings)
 
-    def batch(self, size, shuffle=False, colwise=False):
-        if shuffle:
-            np.random.shuffle(self._indexes)
-        return _DatasetBatchIterator(Dataset(self.take(self._indexes)), size, colwise)
 
-    def __len__(self):
-        return self._len
+_default_type = np.float32
 
-    def __getitem__(self, key):
-        if self._dtype == tuple:
-            return tuple(self._samples)[key]
-        return self._samples[key]
 
-    def take(self, indices):
-        if self._dtype is np.ndarray:
-            return self._samples.take(indices, axis=0)
-        elif isinstance(indices, Iterable):
-            return self._dtype(itemgetter(*indices)(self._samples))
-        return self._samples[indices]
+def _get_int_type(dtype):
+    if not isinstance(dtype, str):
+        dtype = dtype.__name__
+    return np.int64 if dtype == 'float64' else np.int32
 
-    def __repr__(self):
-        return repr(self._samples)
 
-    def __str__(self):
-        return str(self._samples)
+class Initializer(object):
 
-    def cols(self):
-        if self._dtype is np.ndarray:
-            if self._n_cols > 1:
-                return np.swapaxes(self._samples, 0, 1)
-            return self._samples
+    def __call__(self, shape, dtype=np.float32):
+        raise NotImplementedError
+
+
+class Normal(Initializer):
+
+    def __init__(self, scale=1.0):
+        self.scale = scale
+
+    def __call__(self, shape, dtype=np.float32):
+        return np.random.normal(0, self.scale, shape) \
+            .astype(dtype, copy=False)
+
+
+class Uniform(Initializer):
+
+    def __init__(self, scale=1.0):
+        self.scale = scale
+
+    def __call__(self, shape, dtype=np.float32):
+        return np.random.uniform(-1 * self.scale, 1 * self.scale, shape) \
+            .astype(dtype, copy=False)
+
+
+def standard_normal(shape, dtype=np.float32):
+    return np.random.normal(0, 1, shape).astype(dtype, copy=False)
+
+
+class EmbeddingPreprocessor(Preprocessor):
+
+    def __init__(self,
+                 embed_file=None,
+                 embed_size=50,
+                 unknown="<UNK>",
+                 pad=None,
+                 tokenizer=split,
+                 initializer=standard_normal,
+                 preprocess=lower,
+                 vocabulary=None,
+                 min_frequency=1,
+                 embed_dtype=np.float32):
+        if embed_file is not None:
+            vocab_file = None
+            if isinstance(embed_file, (list, tuple)):
+                embed_file, vocab_file = embed_file
+            if vocabulary is not None:
+                warnings.warn("vocabulary will be overwritten "
+                              "by the dict of the embeddings")
+            vocabulary, embeddings = \
+                load_embeddings(embed_file, vocab_file, embed_dtype)
+            self.use_pretrained = True
+            embed_size = embeddings.shape[1]
+        elif embed_size is not None:
+            if embed_size <= 0 or type(embed_size) is not int:
+                raise ValueError("embed_size must be a positive integer value")
+            if vocabulary is None:
+                vocabulary = Vocab()
+            embeddings = initializer(
+                (vocabulary.size, embed_size), embed_dtype)
+            self.use_pretrained = False
         else:
-            if self._n_cols > 1:
-                return tuple(self._dtype(col) for col in zip(*self._samples))
-            return self._dtype(self._samples),
+            raise ValueError("embed_file os embed_size must be specified")
+        self.embed_dtype = embed_dtype
+        self._embeddings = embeddings
+        self._embed_size = embed_size
+        self._initializer = initializer
 
-    @property
-    def dtype(self):
-        return self._dtype
+        super(EmbeddingPreprocessor, self).__init__(
+            unknown, pad, tokenizer, preprocess,
+            vocabulary, min_frequency, _get_int_type(embed_dtype))
+        if not self.use_pretrained and self.pad_id >= 0:
+            self.get_embeddings()
+            self._embeddings[self._pad_id] = 0
 
-    @property
-    def size(self):
-        return self.__len__()
+    def reset_embeddings(self, embed_size):
+        self._embeddings = self._initializer(
+            (self.vocabulary_size, embed_size), self.embed_dtype)
+        if self._pad_id >= 0:
+            self._embeddings[self._pad_id] = 0
+        self._embed_size = embed_size
+        return self._embeddings
 
-    @property
-    def n_cols(self):
-        return self._n_cols
-
-
-class _DatasetBatchIterator(Iterator):
-
-    def __init__(self, dataset, batch_size, colwise=False):
-        self._dataset = dataset
-        self._batch_size = batch_size
-        self._colwise = colwise
-
-    def __iter__(self):
-        dataset = self._dataset
-        dtype = dataset.dtype
-        if self._colwise:
-            if dtype is np.ndarray:
-                def _take(dataset, offset, batch_size):
-                    return dataset.cols()[:, offset:offset + batch_size]
-            elif dataset.n_cols == 1:
-                def _take(dataset, offset, batch_size):
-                    return dataset[offset:offset + batch_size],
-            else:
-                def _take(dataset, offset, batch_size):
-                    return tuple(dtype(col) for col in zip(*dataset._samples[offset:offset + batch_size]))
+    def get_embeddings(self, normalize=False):
+        uninitialized_vocab_size = \
+            self.vocabulary_size - self._embeddings.shape[0]
+        if uninitialized_vocab_size > 0:
+            new_vectors = self._initializer(
+                (uninitialized_vocab_size, self._embed_size), self.embed_dtype)
+            self._embeddings = np.r_[self._embeddings, new_vectors]
+        if not normalize:
+            embeddings = self._embeddings
+        elif normalize == 'l2':
+            l2 = np.linalg.norm(self._embeddings, axis=1, keepdims=True)
+            l2[l2 == 0] = 1
+            embeddings = self._embeddings / l2
+        elif normalize == 'zscore':
+            mean = np.mean(self._embeddings, axis=1, keepdims=True)
+            std = np.std(self._embeddings, axis=1, keepdims=True)
+            embeddings = (self._embeddings - mean) / std
         else:
-            def _take(dataset, offset, batch_size):
-                return dataset[offset:offset + batch_size]
-        size = dataset.size
-        offset = 0
-        while True:
-            if offset >= size:
-                raise StopIteration()
-            yield _take(dataset, offset, self._batch_size)
-            offset += self._batch_size
+            raise ValueError('unsupported normalization was specified: {}'
+                             .format(normalize))
+        return embeddings
 
-    def __next__(self):
-        self.__iter__()
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        del state['_embeddings']
+        return state
 
-
-if __name__ == "__main__":
-    """Sample Code"""
-
-    import pandas as pd
-
-    train_samples = [
-        ("Pierre Vinken , 61 years old , will join the board as a nonexecutive director Nov. 29 .", 1),
-        ("Mr. Vinken is chairman of Elsevier N.V. , the Dutch publishing group .", 0),
-        ("Rudolph Agnew , 55 years old and former chairman of Consolidated Gold Fields PLC , was named a nonexecutive director of this British industrial conglomerate .", 1),
-        ("A form of asbestos once used to make Kent cigarette filters has caused a high percentage of cancer deaths among a group of workers exposed to it more than 30 years ago , researchers reported .", 1),
-        ("The asbestos fiber , crocidolite , is unusually resilient once it enters the lungs , with even brief exposures to it causing symptoms that show up decades later , researchers said .", 1),
-    ]
-    test_samples = [("Lorillard Inc.  , the unit of New York-based Loews Corp. that makes Kent cigarettes , stopped using crocidolite in its Micronite cigarette filters in 1956 .", 0)]
-
-    train_df = pd.DataFrame(train_samples)
-    train_df.columns = ['X', 'y']
-    test_df = pd.DataFrame(test_samples)
-    test_df.columns = ['X', 'y']
-
-    tokenizer = SimpleTokenizer()
-    processor = Preprocessor(embed_size=50, tokenizer=tokenizer)
-    train_X, train_y = processor.fit_transform(train_df['X'].values.tolist(), length=40), train_df['y'].as_matrix()
-    test_X, test_y = processor.transform(test_df['X'].values.tolist(), length=40), test_df['y'].as_matrix()
-
-    train_dataset = Dataset(train_X, train_y)
-    print(train_dataset)
-    print('---\n')
-
-    test_dataset = Dataset(test_X, test_y)
-    print(test_dataset)
-    print('---\n')
-
-    def forward_batch(samples):
-        loss = 80.0
-        accuracy = 0.6
-        return loss, accuracy
-
-    def update(loss):
-        pass
-
-    print('start training ...\n')
-
-    batch_size = 2
-    epoch = 10
-    n_train = len(train_dataset)
-    n_test = len(test_dataset)
-    for i in range(1, epoch + 1):
-        # Training
-        for batch in train_dataset.batch(batch_size, shuffle=True):
-            batch_loss, batch_accuracy = forward_batch(batch)
-            update(batch_loss)
-        print("[training] epoch %d - #samples: %d, loss: %f, accuracy: %f" % (i, n_train, 80.0, 0.6))
-
-        # Evaluation
-        loss = 0.0
-        accuracy = 0.0
-        for batch in test_dataset.batch(batch_size):
-            batch_loss, batch_accuracy = forward_batch(batch)
-        print("[evaluation] epoch %d - #samples: %d, loss: %f, accuracy: %f" % (i, n_test, 80.0, 0.6))
-
-    print('--')
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+        self.reset_embeddings(self._embed_size)

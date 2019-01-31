@@ -3,15 +3,16 @@ import os
 import signal
 import sys
 
-from .argparse import arg, ArgParser, ConfigArgParser
-from ..base import Singleton
-from .. import logging
+from teras import logging, utils
+from teras.app.argparse import arg, ArgParser, ConfigArgParser
+from teras.base import Singleton, classproperty, Context
 
 
 class AppBase(Singleton):
     __instance = None
     _commands = {}
     _argparser = ArgParser()
+    debug = False
 
     def __init__(self):
         raise NotImplementedError()
@@ -20,7 +21,8 @@ class AppBase(Singleton):
     def add_command(cls, name, command, args={}, description=None):
         assert type(args) == dict
         cls._argparser.add_group(name, help=description)
-        for arg_name, value in args.items():
+        for arg_name, value in sorted(args.items(),
+                                      key=lambda x: x[1].names[0]):
             cls.add_arg(arg_name, value, group=name)
         cls._commands[name] = command
 
@@ -58,26 +60,36 @@ class AppBase(Singleton):
             self._finalize()
         except Exception:
             logging.e("Exception occurred during execution:",
-                      exc_info=True, stack_info=True)
+                      exc_info=True, stack_info=cls.debug)
         except SystemExit as e:
             logging.w(e)
         finally:
             logging.getLogger().finalize()
-            sys.exit(0)
+            # sys.exit(0)
 
     @classmethod
     def _get_instance(cls):
-        if cls.__instance is None:
+        if not cls._has_instance():
             instance = object.__new__(cls)
+            instance._initialized = False
+            instance._command = None
+            instance._command_args = None
+            instance._config = None
+            instance._context = None
             cls.__instance = instance
         return cls.__instance
 
+    @classmethod
+    def _has_instance(cls):
+        return cls.__instance is not None
+
     def _initialize(self, command, args, config):
-        if hasattr(self, '_initialized') and self._initialized:
+        if self._initialized:
             return
         self._command = AppBase._commands[command]
         self._command_args = args
         self._config = config
+        self._context = Context(**args)
         self._initialized = True
 
     def _preprocess(self):
@@ -101,19 +113,41 @@ class App(AppBase):
     DEFAULT_CONFIG_FILE = "~/.teras.conf"
     app_name = ''
     _argparser = ConfigArgParser(DEFAULT_CONFIG_FILE)
+    verbose = True
+
+    @staticmethod
+    def _static_initialize():
+        if hasattr(App, '_static_initialized') and App._static_initialized:
+            return
+        entry_script = sys.argv[0]
+        basedir = os.path.dirname(os.path.realpath(entry_script))
+        entry_point = os.path.join(basedir, os.path.basename(entry_script))
+
+        App.basedir = basedir
+        App.entry_script = entry_script
+        App.entry_point = entry_point
+
+        repo = utils.git.root(entry_point)
+        if repo is not None:
+            App.app_name = os.path.basename(repo) + entry_point[len(repo):]
+        else:
+            App.app_name = App.DEFAULT_APP_NAME
+
+        App._static_initialized = True
 
     @classmethod
     def configure(cls, **kwargs):
         if hasattr(cls, '_configured') and cls._configured:
             return
-        cls.app_name = (kwargs['name'] if 'name' in kwargs
-                        else cls.DEFAULT_APP_NAME)
-        script_name = sys.argv[0]
-        basedir = os.path.dirname(os.path.realpath(script_name))
-        default_logdir = basedir + '/logs'
-        loglevel = (kwargs['loglevel']
-                    if 'loglevel' in kwargs else logging.INFO)
-        cls.add_arg('basedir', basedir)
+        if 'name' in kwargs:
+            cls.app_name = kwargs['name']
+        default_logdir = cls.basedir + '/logs'
+        loglevel_choices = [logging.getLevelName(level) for level in
+                            [logging.FATAL,
+                             logging.WARN,
+                             logging.INFO,
+                             logging.DEBUG,
+                             logging.TRACE]]
         cls.add_arg('debug', arg('--debug',
                                  action='store_true',
                                  default=kwargs.get('debug', False),
@@ -123,16 +157,19 @@ class App(AppBase):
                                   default=kwargs.get('logdir', default_logdir),
                                   help='Log directory',
                                   metavar='DIR'))
+        cls.add_arg('loglevel', arg('--loglevel',
+                                    type=str,
+                                    default=kwargs.get('loglevel', 'info'),
+                                    help='Log level',
+                                    choices=loglevel_choices))
         cls.add_arg('logoption', arg('--logoption',
                                      type=str,
                                      default=kwargs.get('logoption', 'a'),
                                      help='Log option: {a,d,h,n,w}',
                                      metavar='VALUE'))
-        cls.add_arg('loglevel', loglevel)
-        cls.add_arg('script_name', script_name)
         cls.add_arg('quiet', arg('--quiet',
                                  action='store_true',
-                                 default=kwargs.get('quiet', False),
+                                 default=kwargs.get('quiet', not(App.verbose)),
                                  help='execute quietly: '
                                  'does not print any message'))
         cls._configured = True
@@ -148,17 +185,20 @@ class App(AppBase):
 
     def _preprocess(self):
         uname = os.uname()
-        verbose = not(self._config['quiet'])
+        App.verbose = not(self._config['quiet'])
+        App.debug = self._config['debug']
 
-        if self._config['debug']:
-            if (self._config['loglevel'] < logging.DISABLE
-                    and self._config['loglevel'] > logging.DEBUG):
-                self._config['loglevel'] = logging.DEBUG
-        logger_name = self._config['script_name']
+        loglevel = logging.logging._checkLevel(self._config['loglevel'])
+        if App.debug:
+            if (loglevel < logging.DISABLE
+                    and loglevel > logging.DEBUG):
+                loglevel = self._config['loglevel'] = logging.DEBUG
+        logger_name = App.entry_script
         logger_config = {
             'logdir': self._config['logdir'],
-            'level': self._config['loglevel'],
-            'verbosity': logging.TRACE if verbose else logging.DISABLE
+            'filemode': 'a',
+            'level': loglevel,
+            'verbosity': logging.TRACE if App.verbose else logging.DISABLE
         }
         for char in self._config['logoption']:
             if char == 'a':
@@ -177,13 +217,23 @@ class App(AppBase):
         logging.AppLogger.configure(**logger_config)
         logger = logging.AppLogger(logger_name)
         logging.setRootLogger(logger)
-        if not verbose:
+        if not App.verbose:
             sys.stdout = sys.stderr = open(os.devnull, 'w')
 
+        logger.v(str(sys.version_info))
         logger.v(str(os.uname()))
-        logger.v("sys.argv: %s" % str(sys.argv))
+        logger.i("sys.argv: %s" % str(sys.argv))
         logger.v("app._config: {}".format(self._config))
         logger.i("*** [START] ***")
 
     def _postprocess(self):
         logging.i("*** [DONE] ***")
+
+    @classproperty
+    def context(cls):
+        if not cls._has_instance():
+            return None
+        return cls._get_instance()._context
+
+
+App._static_initialize()

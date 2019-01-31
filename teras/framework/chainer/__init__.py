@@ -1,9 +1,23 @@
+import os
+
 import chainer
 
-from ...training.trainer import TrainEvent
-from . import model
+from teras.framework.chainer \
+    import callbacks, functions, initializers, model, optimizers
+from teras.training.trainer import TrainEvent
 
-__all__ = ['model', 'config']
+__all__ = ['callbacks', 'chainer_train_on', 'chainer_train_off', 'config',
+           'functions', 'initializers', 'model', 'optimizers', 'set_debug',
+           'set_seed', 'set_model_to_device', 'to_device']
+
+
+# hack
+chainer.Variable.__int__ = lambda self: int(self.data)
+chainer.Variable.__float__ = lambda self: float(self.data)
+
+
+def to_device(x, device=None):
+    return chainer.dataset.convert.to_device(device, x)
 
 
 def _update(optimizer, loss):
@@ -22,6 +36,12 @@ def chainer_train_off(*args, **kwargs):
     chainer.config.enable_backprop = False
 
 
+def set_seed(seed):
+    seed = str(seed)
+    os.environ['CHAINER_SEED'] = seed
+    os.environ['CUPY_SEED'] = seed
+
+
 def set_debug(debug):
     if debug:
         chainer.config.debug = True
@@ -29,6 +49,14 @@ def set_debug(debug):
     else:
         chainer.config.debug = False
         chainer.config.type_check = False
+
+
+def set_model_to_device(model, device_id=-1):
+    if device_id >= 0:
+        chainer.cuda.get_device_from_id(device_id).use()
+        model.to_gpu()
+    else:
+        model.to_cpu()
 
 
 set_debug(chainer.config.debug)
