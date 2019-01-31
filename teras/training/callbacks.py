@@ -1,10 +1,11 @@
 import os
+import pickle
 
 from teras import logging as Log
 from teras.base.event import Callback
 from teras.training.event import TrainEvent
 from teras.utils.progressbar import ProgressBar
-import teras.utils
+from teras.utils.collections import ImmutableMap
 
 
 class ProgressCallback(Callback):
@@ -135,11 +136,13 @@ class Reporter(Callback):
 class Saver(Callback):
 
     def __init__(self, model, basename, directory='', context=None,
-                 interval=1, save_from=None, name="saver", **kwargs):
-        super(Saver, self).__init__(name, **kwargs)
+                 interval=1, save_from=None, serializer=None,
+                 name="saver", **kwargs):
+        super().__init__(name, **kwargs)
         self._model = model
         self._basename = os.path.join(os.path.expanduser(directory), basename)
         self._context = context
+        self._serializer = serializer if serializer is not None else pickle
         if not isinstance(interval, int):
             raise ValueError("interval must be specified as int value: "
                              "actual('{}')".format(type(interval).__name__))
@@ -151,7 +154,7 @@ class Saver(Callback):
             context_file = self._basename + '.context'
             Log.i("saving the context to {} ...".format(context_file))
             with open(context_file, 'wb') as f:
-                teras.utils.dump(self._context, f)
+                self.serializer.dump(self._context, f)
 
     def on_epoch_end(self, data):
         epoch = data['epoch']
@@ -161,4 +164,14 @@ class Saver(Callback):
             model_file = "{}.{}.pkl".format(self._basename, epoch)
             Log.i("saving the model to {} ...".format(model_file))
             with open(model_file, 'wb') as f:
-                teras.utils.dump(self._model, f)
+                self.serializer.dump(self._model, f)
+
+    def load_context(self, model_file, deserializer=None):
+        if deserializer is None:
+            deserializer = self.serializer
+        _dir, _file = os.path.split(model_file)
+        context_file = os.path.basename(_file).split('.')[0] + '.context'
+        context_file = os.path.join(_dir, context_file)
+        with open(context_file, 'rb') as f:
+            context = ImmutableMap(deserializer.load(f))
+        return context

@@ -5,7 +5,9 @@ import sys
 
 from teras.utils import git, logging, argparse
 from teras.utils.argparse import arg
-from teras.utils.classes import Singleton, classproperty, Context
+from teras.utils.abc import Singleton
+from teras.utils.decorators import classproperty
+from teras.utils.collections import ImmutableMap
 
 
 class AppBase(Singleton):
@@ -89,7 +91,7 @@ class AppBase(Singleton):
         self._command = AppBase._commands[command]
         self._command_args = args
         self._config = config
-        self._context = Context(**args)
+        self._context = ImmutableMap(**args)
         self._initialized = True
 
     def _preprocess(self):
