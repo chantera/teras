@@ -42,14 +42,9 @@ SOFTWARE.
 
 """
 
-from teras import app
-from teras import base
-from teras import dataset
-from teras import framework
-from teras import io
-from teras import preprocessing
-from teras import training
-from teras import utils
-
-__all__ = ['app', 'base', 'dataset', 'framework', 'io',
-           'preprocessing', 'training', 'utils']
+from teras import app  # NOQA
+from teras import dataset  # NOQA
+from teras import io  # NOQA
+from teras import preprocessing  # NOQA
+from teras import training  # NOQA
+from teras import utils  # NOQA

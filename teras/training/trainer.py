@@ -1,13 +1,12 @@
 import math
 
-from teras import logging as Log
-from teras.base.event import EventSender
 from teras.dataset import Dataset
-from teras.training.callbacks import ProgressCallback, Reporter, report
-from teras.training.event import TrainEvent
+from teras.training import listeners
+from teras.training.event import Dispatcher, TrainEvent
+from teras.utils import logging as Log
 
 
-class Trainer(EventSender):
+class Trainer(Dispatcher):
     EventClass = TrainEvent
 
     def __init__(self, optimizer, forward, loss_func, accuracy_func=None):
@@ -36,9 +35,9 @@ class Trainer(EventSender):
         if 'hooks' in config:
             for event, hook in config['hooks'].items():
                 self.add_hook(event, hook)
-        if 'callbacks' in config:
-            for callback in config['callbacks']:
-                self.add_callback(callback)
+        if 'listeners' in config:
+            for listener in config['listeners']:
+                self.add_listener(listener)
         if 'converter' in config:
             self._converter = config['converter']
 
@@ -118,19 +117,20 @@ class Trainer(EventSender):
 
     def _init_events_on_fit(self, do_validation, verbose=True):
         if verbose:
-            callback = ProgressCallback()
+            listener = listeners.ProgressBar()
             if do_validation:
-                callback.implement(TrainEvent.EPOCH_VALIDATE_BEGIN,
-                                   callback.init_progressbar)
-                callback.implement(TrainEvent.EPOCH_VALIDATE_END,
-                                   callback.finish_progressbar)
-            self.attach_callback(callback, priority=300, update=True)
+                listener.implement(TrainEvent.EPOCH_VALIDATE_BEGIN,
+                                   listener.init_progressbar)
+                listener.implement(TrainEvent.EPOCH_VALIDATE_END,
+                                   listener.finish_progressbar)
+            self.attach_listener(listener, priority=300, update=True)
 
-        self._reporter = Reporter()
-        self.attach_callback(self._reporter, priority=200)
+        self._reporter = listeners.Reporter()
+        self.attach_listener(self._reporter, priority=200)
         if self._acc_func is not None:
             def _report_accuracy(data):
-                report({"accuracy": self._acc_func(data['ys'], data['ts'])})
+                listeners.report(
+                    {"accuracy": self._acc_func(data['ys'], data['ts'])})
             self.add_hook(TrainEvent.BATCH_END, _report_accuracy)
         self.add_hook(TrainEvent.EPOCH_END, lambda data: Log.v('-'))
 

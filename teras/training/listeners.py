@@ -1,18 +1,15 @@
 import os
 import pickle
 
-from teras import logging as Log
-from teras.base.event import Callback
-from teras.training.event import TrainEvent
-from teras.utils.progressbar import ProgressBar
-from teras.utils.collections import ImmutableMap
+from teras.training.event import Listener, TrainEvent
+from teras.utils import collections, logging as Log, progressbar
 
 
-class ProgressCallback(Callback):
+class ProgressBar(Listener):
 
-    def __init__(self, name="progress_callback", **kwargs):
-        super(ProgressCallback, self).__init__(name, **kwargs)
-        self._pbar = ProgressBar()
+    def __init__(self, name="progressbar", **kwargs):
+        super().__init__(name, **kwargs)
+        self._pbar = progressbar.ProgressBar()
         self.implement(TrainEvent.EPOCH_TRAIN_BEGIN, self.init_progressbar)
         self.implement(TrainEvent.BATCH_END, self.update_progressbar)
         self.implement(TrainEvent.EPOCH_TRAIN_END, self.finish_progressbar)
@@ -37,7 +34,7 @@ def report(values):
         _reporters[-1].report(values)
 
 
-class Reporter(Callback):
+class Reporter(Listener):
 
     def __init__(self, name="reporter", **kwargs):
         super(Reporter, self).__init__(name, **kwargs)
@@ -133,7 +130,7 @@ class Reporter(Callback):
             Log.i(", ".join(message))
 
 
-class Saver(Callback):
+class Saver(Listener):
 
     def __init__(self, model, basename, directory='', context=None,
                  interval=1, save_from=None, serializer=None,
@@ -173,5 +170,5 @@ class Saver(Callback):
         context_file = os.path.basename(_file).split('.')[0] + '.context'
         context_file = os.path.join(_dir, context_file)
         with open(context_file, 'rb') as f:
-            context = ImmutableMap(deserializer.load(f))
+            context = collections.ImmutableMap(deserializer.load(f))
         return context
