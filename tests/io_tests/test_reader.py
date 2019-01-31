@@ -1,9 +1,13 @@
+import pathlib
 import unittest
 
 from teras.io import reader
 
 
-CONLL_FILE = '/Users/hiroki/Desktop/NLP/data/ptb-sd3.3.0/dep/wsj_00.conll'
+SAMPLE_DIR = (pathlib.Path(__file__).parent / '../samples').resolve()
+CONLL_FILE = SAMPLE_DIR / 'wsj-test.conll'
+TREE_FILE1 = SAMPLE_DIR / 'wsj_0001.mrg'
+TREE_FILE2 = SAMPLE_DIR / 'wsj_0001.ext'
 
 
 class TestConllReader(unittest.TestCase):
@@ -65,10 +69,6 @@ class TestConllReader(unittest.TestCase):
         print(data[0][10])
         self.assertTrue(len(data) > 0)
         self.assertTrue(data[0][10]['form'] == 'fall')
-
-
-TREE_FILE1 = '/Users/hiroki/Desktop/NLP/data/treebank_3/data/wsj_00.mrg'
-TREE_FILE2 = '/Users/hiroki/Desktop/NLP/data/Treebank3_coord/ext/00/wsj_0001.ext'  # perline  # NOQA
 
 
 class TestTreeReader(unittest.TestCase):

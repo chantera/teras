@@ -1,3 +1,4 @@
+import pathlib
 import re
 import sys
 import unittest
@@ -70,9 +71,9 @@ class DataLoader(CorpusLoader):
         self.__dict__.update(state)
 
 
-# TODO(chantera): Fix.
-TRAIN_FILE = '~/work/host-work/NLP/data/ptb-sd3.3.0/dep/wsj_02-21.conll'
-TEST_FILE = '~/work/host-work/NLP/data/ptb-sd3.3.0/dep/wsj_22.conll'
+SAMPLE_DIR = (pathlib.Path(__file__).parent / '../samples').resolve()
+TRAIN_FILE = SAMPLE_DIR / 'wsj-train.conll'
+TEST_FILE = SAMPLE_DIR / 'wsj-test.conll'
 
 
 class TestLoader(unittest.TestCase):
@@ -84,7 +85,11 @@ class TestLoader(unittest.TestCase):
 
     def test_load(self):
         train_dataset = self.loader.load(TRAIN_FILE, train=True, size=1000)
+        sys.stderr.write("\n")
+        sys.stderr.flush()
         test_dataset = self.loader.load(TEST_FILE, train=False, size=100)
+        sys.stderr.write("\n")
+        sys.stderr.flush()
         self.assertTrue(len(train_dataset) > 0)
         self.assertTrue(len(test_dataset) > 0)
 
