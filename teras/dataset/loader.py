@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 
-from teras.dataset import Dataset, GroupedDataset
+from teras.dataset.dataset import Dataset, GroupedDataset
 from teras.preprocessing import text
 
 

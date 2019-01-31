@@ -1,3 +1,1 @@
-from teras.io import reader
-
-__all__ = ['reader']
+from teras.io import reader  # NOQA

@@ -3,8 +3,6 @@ from collections.abc import Sequence
 
 import numpy as np
 
-from teras.dataset.mnist import get_mnist  # NOQA
-
 
 class Dataset(Sequence):
     """Immutable Class"""
