@@ -3,15 +3,15 @@ import os
 import signal
 import sys
 
-from teras import logging, utils
-from teras.app.argparse import arg, ArgParser, ConfigArgParser
-from teras.base import Singleton, classproperty, Context
+from teras.utils import git, logging, argparse
+from teras.utils.argparse import arg
+from teras.utils.classes import Singleton, classproperty, Context
 
 
 class AppBase(Singleton):
     __instance = None
     _commands = {}
-    _argparser = ArgParser()
+    _argparser = argparse.ArgParser()
     debug = False
 
     def __init__(self):
@@ -112,7 +112,7 @@ class App(AppBase):
     DEFAULT_APP_NAME = "teras.app"
     DEFAULT_CONFIG_FILE = "~/.teras.conf"
     app_name = ''
-    _argparser = ConfigArgParser(DEFAULT_CONFIG_FILE)
+    _argparser = argparse.ConfigArgParser(DEFAULT_CONFIG_FILE)
     verbose = True
 
     @staticmethod
@@ -127,7 +127,7 @@ class App(AppBase):
         App.entry_script = entry_script
         App.entry_point = entry_point
 
-        repo = utils.git.root(entry_point)
+        repo = git.root(entry_point)
         if repo is not None:
             App.app_name = os.path.basename(repo) + entry_point[len(repo):]
         else:
@@ -148,30 +148,26 @@ class App(AppBase):
                              logging.INFO,
                              logging.DEBUG,
                              logging.TRACE]]
-        cls.add_arg('debug', arg('--debug',
-                                 action='store_true',
-                                 default=kwargs.get('debug', False),
-                                 help='Enable debug mode'))
-        cls.add_arg('logdir', arg('--logdir',
-                                  type=str,
-                                  default=kwargs.get('logdir', default_logdir),
-                                  help='Log directory',
-                                  metavar='DIR'))
-        cls.add_arg('loglevel', arg('--loglevel',
-                                    type=str,
-                                    default=kwargs.get('loglevel', 'info'),
-                                    help='Log level',
-                                    choices=loglevel_choices))
-        cls.add_arg('logoption', arg('--logoption',
-                                     type=str,
-                                     default=kwargs.get('logoption', 'a'),
-                                     help='Log option: {a,d,h,n,w}',
-                                     metavar='VALUE'))
-        cls.add_arg('quiet', arg('--quiet',
-                                 action='store_true',
-                                 default=kwargs.get('quiet', not(App.verbose)),
-                                 help='execute quietly: '
-                                 'does not print any message'))
+        cls.add_arg('debug', arg(
+            '--debug', action='store_true',
+            default=kwargs.get('debug', False),
+            help='Enable debug mode'))
+        cls.add_arg('logdir', arg(
+            '--logdir', metavar='DIR', type=str,
+            default=kwargs.get('logdir', default_logdir),
+            help='Log directory'))
+        cls.add_arg('loglevel', arg(
+            '--loglevel', type=str, choices=loglevel_choices,
+            default=kwargs.get('loglevel', 'info'),
+            help='Log level'))
+        cls.add_arg('logoption', arg(
+            '--logoption', metavar='VALUE', type=str,
+            default=kwargs.get('logoption', 'a'),
+            help='Log option: {a,d,h,n,w}'))
+        cls.add_arg('quiet', arg(
+            '--quiet', action='store_true',
+            default=kwargs.get('quiet', not(App.verbose)),
+            help='execute quietly: does not print any message'))
         cls._configured = True
 
     @classmethod

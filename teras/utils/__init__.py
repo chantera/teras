@@ -1,7 +1,7 @@
 import dill
 import os
 
-from teras.base import Context
+from teras.utils import classes
 from teras.utils import builtin
 from teras.utils import git
 from teras.utils import progressbar
@@ -22,5 +22,5 @@ def load_context(model_file):
     context_file = os.path.basename(_file).split('.')[0] + '.context'
     context_file = os.path.join(_dir, context_file)
     with open(context_file, 'rb') as f:
-        context = Context(load(f))
+        context = classes.Context(load(f))
     return context
