@@ -222,28 +222,12 @@ class Preprocessor(object):
     def _fit_tranform_vocabulary(self, word):
         return self._wrapper.fit_transform(word)
 
-    def fit(self, raw_documents):
-        if isinstance(raw_documents, str):
-            self.fit_one(raw_documents)
-        else:
-            for document in raw_documents:
-                self.fit_one(document)
-        return self
-
-    def fit_one(self, raw_document):
+    def fit(self, raw_document):
         for token in self._extract_tokens(raw_document):
             self._fit_vocabulary(token)
         return self
 
-    def transform(self, raw_documents, length=None):
-        if isinstance(raw_documents, str):
-            return self.transform_one(raw_documents, length)
-        else:
-            samples = [self.transform_one(document, length)
-                       for document in raw_documents]
-            return np.array(samples, self.index_dtype) if length else samples
-
-    def transform_one(self, raw_document, length=None):
+    def transform(self, raw_document, length=None):
         tokens = self._extract_tokens(raw_document)
         if length is not None:
             word_ids = np.full(length, self._pad_id, dtype=self.index_dtype)
@@ -254,34 +238,9 @@ class Preprocessor(object):
             word_ids = np.array(indices, self.index_dtype)
         return word_ids
 
-    def fit_transform(self, raw_documents, length=None):
-        if isinstance(raw_documents, str):
-            # fit and transform as one instance
-            return self.fit_transform_one(raw_documents, length)
-        elif self._min_frequency > 0:
-            # fit and then transform(
-            return self.fit(raw_documents).transform(raw_documents, length)
-        elif length:
-            # fit and transform simultaneously (with padding)
-            return np.vstack([
-                _np_pad(list(map(self._wrapper.fit_transform,
-                                 self._extract_tokens(raw_document))),
-                        length,
-                        self._pad_id,
-                        self.index_dtype)
-                for raw_document in raw_documents])
-        else:
-            # fit and transform simultaneously (without padding)
-            return [
-                np.array(list(map(self._wrapper.fit_transform,
-                                  self._extract_tokens(raw_document))),
-                         self.index_dtype)
-                for raw_document in raw_documents]
-
-    def fit_transform_one(self, raw_document, length=None):
+    def fit_transform(self, raw_document, length=None):
         if self._min_frequency > 0:
-            return self.fit_one(raw_document) \
-                .transform_one(raw_document, length)
+            return self.fit(raw_document).transform(raw_document, length)
         else:
             ids = np.array([self._wrapper.fit_transform(token)
                             for token in self._extract_tokens(raw_document)],
@@ -369,34 +328,12 @@ def _get_int_type(dtype):
     return np.int64 if dtype == 'float64' else np.int32
 
 
-class Initializer(object):
-
-    def __call__(self, shape, dtype=np.float32):
-        raise NotImplementedError
-
-
-class Normal(Initializer):
-
-    def __init__(self, scale=1.0):
-        self.scale = scale
-
-    def __call__(self, shape, dtype=np.float32):
-        return np.random.normal(0, self.scale, shape) \
-            .astype(dtype, copy=False)
-
-
-class Uniform(Initializer):
-
-    def __init__(self, scale=1.0):
-        self.scale = scale
-
-    def __call__(self, shape, dtype=np.float32):
-        return np.random.uniform(-1 * self.scale, 1 * self.scale, shape) \
-            .astype(dtype, copy=False)
-
-
-def standard_normal(shape, dtype=np.float32):
+def random_normal(shape, dtype=np.float32):
     return np.random.normal(0, 1, shape).astype(dtype, copy=False)
+
+
+def random_uniform(shape, dtype=np.float32):
+    return np.random.uniform(-1, 1, shape).astype(dtype, copy=False)
 
 
 class EmbeddingPreprocessor(Preprocessor):
@@ -407,7 +344,7 @@ class EmbeddingPreprocessor(Preprocessor):
                  unknown="<UNK>",
                  pad=None,
                  tokenizer=split,
-                 initializer=standard_normal,
+                 initializer=random_normal,
                  preprocess=lower,
                  vocabulary=None,
                  min_frequency=1,

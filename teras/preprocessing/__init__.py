@@ -1,3 +1,1 @@
-from teras.preprocessing import text
-
-__all__ = ['text']
+from teras.preprocessing import text  # NOQA
