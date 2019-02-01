@@ -1,29 +1,56 @@
 import os
 import pickle
 
-from teras.training.event import Listener, TrainEvent
-from teras.utils import collections, logging as Log, progressbar
+from teras.training.event import Listener
+from teras.utils import collections, logging as Log
 
 
 class ProgressBar(Listener):
+    """
+    Example::
 
-    def __init__(self, name="progressbar", **kwargs):
+        >>> from tqdm import tqdm
+        >>> import time
+        >>> pbar = ProgressBar(lambda n: tqdm(total=n))
+        >>> pbar.init(512)
+        >>> for _ in range(16):
+        >>>     time.sleep(0.1)
+        >>>     pbar.update(32)
+        >>> pbar.close()
+    """
+
+    def __init__(self, factory, name="progressbar", **kwargs):
         super().__init__(name, **kwargs)
-        self._pbar = progressbar.ProgressBar()
-        self.implement(TrainEvent.EPOCH_TRAIN_BEGIN, self.init_progressbar)
-        self.implement(TrainEvent.BATCH_END, self.update_progressbar)
-        self.implement(TrainEvent.EPOCH_TRAIN_END, self.finish_progressbar)
+        self._pbar = None
+        self._factory = factory
 
-    def init_progressbar(self, data):
-        self._pbar.start(data['size'])
-        self._count = 0
+    def init(self, total):
+        self.close()
+        self._pbar = self._factory(total)
 
-    def update_progressbar(self, data):
-        self._count += data['batch_size']
-        self._pbar.update(self._count)
+    def update(self, n):
+        self._pbar.update(n)
 
-    def finish_progressbar(self, data):
-        self._pbar.finish()
+    def close(self):
+        if self._pbar is not None:
+            self._pbar.close()
+            self._pbar = None
+
+    def __del__(self):
+        self.close()
+
+    def on_epoch_train_begin(self, data):
+        self.init(data['size'])
+
+    def on_batch_end(self, data):
+        self.update(data['batch_size'])
+
+    def on_epoch_train_end(self, data):
+        self.close()
+
+    on_epoch_validate_begin = on_epoch_train_begin
+
+    on_epoch_validate_end = on_epoch_train_end
 
 
 _reporters = []

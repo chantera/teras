@@ -5,4 +5,3 @@ from teras.utils import collections  # NOQA
 from teras.utils import decorators  # NOQA
 from teras.utils import git  # NOQA
 from teras.utils import logging  # NOQA
-from teras.utils import progressbar  # NOQA

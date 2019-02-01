@@ -3,7 +3,6 @@ import math
 from teras.dataset import Dataset
 from teras.training import listeners
 from teras.training.event import Dispatcher, TrainEvent
-from teras.utils import logging as Log
 
 
 class Trainer(Dispatcher):
@@ -46,9 +45,7 @@ class Trainer(Dispatcher):
             y=None,
             batch_size=32,
             epochs=10,
-            validation_data=None,
-            verbose=True):
-
+            validation_data=None):
         if isinstance(x, Dataset):
             train_dataset = x
             assert y is None
@@ -73,7 +70,13 @@ class Trainer(Dispatcher):
         else:
             do_validation = False
 
-        self._init_events_on_fit(do_validation, verbose)
+        self._reporter = listeners.Reporter()
+        self.attach_listener(self._reporter, priority=150)
+        if self._acc_func is not None:
+            def _report_accuracy(data):
+                listeners.report(
+                    {"accuracy": self._acc_func(data['ys'], data['ts'])})
+            self.add_hook(TrainEvent.BATCH_END, _report_accuracy)
 
         forward = self._forward
         if not callable(forward):
@@ -114,25 +117,6 @@ class Trainer(Dispatcher):
         self.notify(TrainEvent.TRAIN_END)
 
         return history
-
-    def _init_events_on_fit(self, do_validation, verbose=True):
-        if verbose:
-            listener = listeners.ProgressBar()
-            if do_validation:
-                listener.implement(TrainEvent.EPOCH_VALIDATE_BEGIN,
-                                   listener.init_progressbar)
-                listener.implement(TrainEvent.EPOCH_VALIDATE_END,
-                                   listener.finish_progressbar)
-            self.attach_listener(listener, priority=300, update=True)
-
-        self._reporter = listeners.Reporter()
-        self.attach_listener(self._reporter, priority=200)
-        if self._acc_func is not None:
-            def _report_accuracy(data):
-                listeners.report(
-                    {"accuracy": self._acc_func(data['ys'], data['ts'])})
-            self.add_hook(TrainEvent.BATCH_END, _report_accuracy)
-        self.add_hook(TrainEvent.EPOCH_END, lambda data: Log.v('-'))
 
     def _process(self,
                  forward,
