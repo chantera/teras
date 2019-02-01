@@ -1,8 +1,9 @@
 import os
 import pickle
+import logging
 
 from teras.training.event import Listener
-from teras.utils import collections, logging as Log
+from teras.utils import collections
 
 
 class ProgressBar(Listener):
@@ -63,8 +64,9 @@ def report(values):
 
 class Reporter(Listener):
 
-    def __init__(self, name="reporter", **kwargs):
+    def __init__(self, logger, name="reporter", **kwargs):
         super(Reporter, self).__init__(name, **kwargs)
+        self._logger = logger
         self._logs = {}
         self._reported = 0
         self._history = []
@@ -140,7 +142,7 @@ class Reporter(Listener):
             v = self._logs.get('accuracy', None)
             if isinstance(v, list) and v[1] > 0:
                 message += " ({}/{})".format(v[0], v[1])
-        Log.i(message)
+        self._logger.info(message)
         message = []
         for name, value in summary.items():
             if name == 'loss' or name == 'accuracy':
@@ -154,29 +156,35 @@ class Reporter(Listener):
                 if isinstance(v, list) and v[1] > 0:
                     message[-1] += " ({}/{})".format(v[0], v[1])
         if message:
-            Log.i(", ".join(message))
+            self._logger.info(", ".join(message))
 
 
 class Saver(Listener):
 
     def __init__(self, model, basename, directory='', context=None,
                  interval=1, save_from=None, serializer=None,
-                 name="saver", **kwargs):
+                 logger=None, name="saver", **kwargs):
         super().__init__(name, **kwargs)
         self._model = model
         self._basename = os.path.join(os.path.expanduser(directory), basename)
         self._context = context
-        self._serializer = serializer if serializer is not None else pickle
         if not isinstance(interval, int):
             raise ValueError("interval must be specified as int value: "
                              "actual('{}')".format(type(interval).__name__))
         self._interval = interval
         self._save_from = save_from
+        self._serializer = serializer if serializer is not None else pickle
+        if logger is None:
+            logger = logging.getLogger('teras')
+            logger.addHandler(logging.NullHandler())
+            logger.setLevel(logging.DEBUG)
+        self._logger = logger
 
     def on_train_begin(self, data):
         if self._context is not None:
             context_file = self._basename + '.context'
-            Log.i("saving the context to {} ...".format(context_file))
+            self._logger.info(
+                "saving the context to {} ...".format(context_file))
             with open(context_file, 'wb') as f:
                 self.serializer.dump(self._context, f)
 
@@ -186,7 +194,7 @@ class Saver(Listener):
             return
         if epoch % self._interval == 0:
             model_file = "{}.{}.pkl".format(self._basename, epoch)
-            Log.i("saving the model to {} ...".format(model_file))
+            self._logger.info("saving the model to {} ...".format(model_file))
             with open(model_file, 'wb') as f:
                 self.serializer.dump(self._model, f)
 

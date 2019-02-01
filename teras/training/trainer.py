@@ -3,6 +3,7 @@ import math
 from teras.dataset import Dataset
 from teras.training import listeners
 from teras.training.event import Dispatcher, TrainEvent
+from teras.utils import logging
 
 
 class Trainer(Dispatcher):
@@ -70,7 +71,7 @@ class Trainer(Dispatcher):
         else:
             do_validation = False
 
-        self._reporter = listeners.Reporter()
+        self._reporter = listeners.Reporter(logging.getLogger())
         self.attach_listener(self._reporter, priority=150)
         if self._acc_func is not None:
             def _report_accuracy(data):
