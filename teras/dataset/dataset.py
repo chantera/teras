@@ -127,6 +127,7 @@ class BucketDataset(Dataset):
                 if accum_length >= size:
                     buckets.append(np.array(bucket))
                     bucket = []
+                    accum_length = 0
             if bucket:
                 buckets.append(np.array(bucket))
         else:
