@@ -45,7 +45,7 @@ class Dataset(Sequence):
         offset = 0
         while True:
             if offset >= size:
-                raise StopIteration()
+                return
             indices = self._indices[offset:offset + batch_size]
             yield np.take(self._samples, indices, axis=0)
             offset += batch_size
@@ -63,7 +63,7 @@ class Dataset(Sequence):
 
         while True:
             if offset >= size:
-                raise StopIteration()
+                return
             indices = self._indices[offset:offset + batch_size]
             yield tuple(_take(column, indices) for column in self._columns)
             offset += batch_size
@@ -105,6 +105,70 @@ class Dataset(Sequence):
     @property
     def n_cols(self):
         return self._n_cols
+
+
+class BucketDataset(Dataset):
+
+    def __init__(self, *samples, key=0, equalize_by_key=False):
+        super().__init__(*samples)
+        self._key = key
+        self._equalize = equalize_by_key
+
+    def batch(self, size, shuffle=False, colwise=True):
+        key = self._key
+        lengths = ((float(len(sample[key])), index)
+                   for index, sample in enumerate(self))
+        if shuffle:
+            # Add noise to the lengths so that the sorting isn't deterministic.
+            lengths = ((length + np.random.random(), index)
+                       for length, index in lengths)
+            # Randomly choose the order from (ASC, DESC).
+            lengths = sorted(lengths, key=lambda x: x[0],
+                             reverse=np.random.random() > .5)
+        # Bucketing
+        if self._equalize:
+            buckets = []
+            bucket = []
+            accum_length = 0
+            for item in lengths:
+                bucket.append(item)
+                accum_length += int(item[1])
+                if accum_length >= size:
+                    buckets.append(bucket)
+                    bucket = []
+            if bucket:
+                buckets.append(bucket)
+        else:
+            lengths = list(lengths)
+            buckets = [lengths[i: i + size]
+                       for i in range(0, self._len, size)]
+        if shuffle:
+            np.random.shuffle(buckets)
+        if colwise:
+            return self._get_col_iterator(buckets)
+        else:
+            return self._get_row_iterator(buckets)
+
+    def _get_row_iterator(self, buckets):
+        iterator = iter(buckets)
+        while True:
+            try:
+                bucket = next(iterator)
+            except StopIteration:
+                return
+            indices = [item[1] for item in bucket]
+            yield np.take(self._samples, indices, axis=0)
+
+    def _get_col_iterator(self, buckets):
+        iterator = iter(buckets)
+        while True:
+            try:
+                bucket = next(iterator)
+            except StopIteration:
+                return
+            indices = [item[1] for item in bucket]
+            yield tuple(np.take(column, indices, axis=0)
+                        for column in self._columns)
 
 
 class GroupedDataset(Dataset):
