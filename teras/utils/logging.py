@@ -7,8 +7,6 @@ import sys
 import time
 import uuid
 
-from dateutil.tz import tzlocal
-
 
 DISABLE = sys.maxsize
 CRITICAL = logging.CRITICAL
@@ -33,13 +31,26 @@ logging.addLevelName(TRACE, 'trace')
 logging.addLevelName(NOTSET, 'none')
 
 
+def _format_time(format, t, nsecs=None, precision=6):
+    if '%f' in format:
+        if nsecs is None:
+            if isinstance(t, float):
+                nsecs = int((t - int(t)) * 1e+6)
+            else:
+                nsecs = 0
+        if precision < 6:
+            nsecs = int(nsecs * (0.1 ** (6 - precision)))
+        format = format.replace(
+            '%f', '{:0{prec}d}'.format(nsecs, prec=precision))
+    return time.strftime(format, t)
+
+
 class Formatter(logging.Formatter):
 
     def formatTime(self, record, datefmt=None):
         ct = self.converter(record.created)
         if datefmt:
-            t = datefmt.replace('%f', '{:03d}'.format(int(record.msecs)))
-            s = time.strftime(t, ct)
+            s = _format_time(datefmt, ct, int(record.msecs * 1000), 3)
         else:
             t = time.strftime(self.default_time_format, ct)
             s = self.default_msec_format % (t, record.msecs)
@@ -73,7 +84,7 @@ class ColoredFormatter(Formatter):
     }
 
     def format(self, record):
-        s = super(ColoredFormatter, self).format(record)
+        s = super().format(record)
         level = record.levelno
         if level in ColoredFormatter.COLORS:
             s = (ColoredFormatter.FORMAT
@@ -85,7 +96,7 @@ class Logger(logging.Logger):
 
     def __init__(self, name, level=NOTSET, handlers=[]):
         self._initialized = False
-        super(Logger, self).__init__(name, level)
+        super().__init__(name, level)
         for hdlr in handlers:
             self.addHandler(hdlr)
         self.initialize()
@@ -159,13 +170,15 @@ class AppLogger(Logger):
         cls._config.update(kwargs)
 
     def initialize(self):
-        super(AppLogger, self).initialize()
+        super().initialize()
         config = AppLogger._config
-        now = datetime.now(tzlocal())
+        now = time.time()
         self._accessid = uuid.uuid4().hex[:6]
         self._uniqueid = "UNIQID"
         self._accesssec = now
-        self._accesstime = now.strftime(config['datefmt'])
+        self._accesstime = _format_time(
+            config['datefmt'], logging.Formatter.converter(now),
+            nsecs=int((now - int(now)) * 1e+6))
 
         if len(self.handlers) == 0:
             if config['filelog']:
@@ -239,17 +252,16 @@ class AppLogger(Logger):
         return logfile
 
     def finalize(self):
-        processtime = ('%3.9f' % (datetime.now(tzlocal())
-                                  - self._accesssec).total_seconds())
+        processtime = ('%3.9f' % (time.time() - self._accesssec))
         message = ("LOG End with ACCESSID=[%s] UNIQUEID=[%s] "
                    "ACCESSTIME=[%s] PROCESSTIME=[%s]\n")
         self.info(message % (self._accessid, self._uniqueid,
                              self._accesstime, processtime))
-        super(AppLogger, self).finalize()
+        super().finalize()
 
     def filter(self, record):
         record.accessid = self._accessid
-        return super(AppLogger, self).filter(record)
+        return super().filter(record)
 
     @property
     def accessid(self):
