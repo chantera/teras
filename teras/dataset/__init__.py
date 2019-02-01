@@ -1,2 +1,2 @@
 from teras.dataset import loader  # NOQA
-from teras.dataset.dataset import Dataset, GroupedDataset  # NOQA
+from teras.dataset.dataset import Dataset, BucketDataset  # NOQA

@@ -90,49 +90,8 @@ class TestLoader(unittest.TestCase):
         test_dataset = self.loader.load(TEST_FILE, train=False, size=100)
         sys.stderr.write("\n")
         sys.stderr.flush()
-        # test_dataset.make_groups(20)
-        # sys.stderr.write(str(test_dataset._group_indices) + "\n")
-        # # sys.stderr.write(str(test_dataset._groups) + "\n")
-        for batch in train_dataset.batch(size=32, shuffle=True, colwise=False):
-            pass
-        for batch in train_dataset.batch(size=32, shuffle=True, colwise=True):
-            pass
-        for batch in test_dataset.batch(size=32, shuffle=False, colwise=False):
-            pass
-        for batch in test_dataset.batch(size=32, shuffle=False, colwise=True):
-            pass
-        #     # sys.stderr.write(str(len(b[0])) + "\n")
-        #     sys.stderr.write(str([len(i) for i in b[0]]) + "\n")
-        #     # sys.stderr.write(str(b[0]) + "\n")
-        # sys.stderr.flush()
         self.assertTrue(len(train_dataset) > 0)
         self.assertTrue(len(test_dataset) > 0)
-
-    def test_bucketing(self):
-        dataset = self.loader.load(TRAIN_FILE, train=True, bucketing=True)
-        sys.stderr.write("\n")
-        sys.stderr.flush()
-        self.assertTrue(len(dataset) == 1100)
-        batch_min_max_list = []
-        tail = None
-        for i, batch in enumerate(
-                dataset.batch(size=32, shuffle=True, colwise=False)):
-            lengths = [len(sample[0]) for sample in batch]
-            batch_size = len(lengths)
-            if batch_size == 12:
-                self.assertTrue(tail is None)
-                tail = i
-            else:
-                self.assertTrue(batch_size == 32)
-            batch_min_max = min(lengths), max(lengths)
-            batch_min_max_list.append(batch_min_max)
-        self.assertTrue(len(batch_min_max_list) == 35)
-        batch_min_max_list.sort(key=lambda x: x[0] * 10 + x[1])
-        sys.stderr.write("min_max: {}\n".format(batch_min_max_list))
-        sys.stderr.flush()
-        for i in range(1, len(batch_min_max_list)):
-            self.assertTrue(batch_min_max_list[i][0]
-                            >= batch_min_max_list[i - 1][1])
 
 
 if __name__ == "__main__":
