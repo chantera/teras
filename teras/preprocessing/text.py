@@ -1,4 +1,4 @@
-from collections import defaultdict, Iterable, UserDict
+from collections import Iterable, UserDict
 import copy
 import re
 import warnings
@@ -109,7 +109,7 @@ class Dict(UserDict):
 
 class Vocab(object):
 
-    def __init__(self, unknown):
+    def __init__(self, unknown="<UNK>"):
         self._dict = Dict()
         self._unknown_id = self._dict[unknown]
 
@@ -137,39 +137,92 @@ class Vocab(object):
         return self._unknown_id
 
     @classmethod
-    def from_words(cls, iterable, unknown):
+    def from_words(cls, iterable, unknown="<UNK>"):
         v = cls(unknown)
         for word in iterable:
             v.add(word)
         return v
 
-class _FrequentVocabWrapper(_VocabWrapper):
 
-    def __init__(self, vocabulary, unknown, min_frequency=1):
-        super().__init__(vocabulary, unknown)
-        self._min_frequency = min_frequency
-        self._count = defaultdict(int)
+class EmbeddingVocab(Vocab):
 
-    def fit(self, word):
-        self._count[word] = count = self._count[word] + 1
-        if word not in self._vocabulary and count >= self.min_frequency:
-            self._vocabulary.add(word)
-        return self
+    def __init__(self, unknown="<UNK>", file=None, dim=50, dtype=np.float32,
+                 initializer=None, serialize_embeddings=False):
+        if file is not None:
+            embed_file, vocab_file = file, None
+            if isinstance(file, (list, tuple)):
+                assert len(file) == 2
+                embed_file, vocab_file = file
+            vdict, embeddings = load_embeddings(embed_file, vocab_file, dtype)
+        else:
+            if not isinstance(dim, int) or dim <= 0:
+                raise ValueError("embed_size must be a positive integer value")
+            vdict, embeddings = Dict(), np.empty((0, dim), dtype)
 
-    def transform(self, word):
-        if self._count[word] < self._min_frequency:
-            return self._unknown_id
-        return self._vocabulary[word]
+        if initializer is None or initializer == 'normal':
+            initializer = EmbeddingVocab.random_normal
+        elif initializer == 'uniform':
+            initializer = EmbeddingVocab.random_uniform
+        elif not callable(initializer):
+            raise ValueError("invalid initializer")
 
-    def fit_transform(self, word):
-        self._count[word] = count = self._count[word] + 1
-        if count < self.min_frequency:
-            return self._unknown_id
-        return self._vocabulary[word]
+        self._dict = vdict
+        self._unknown_id = self._dict[unknown]
+        self._file = file
+        self._embeddings = embeddings
+        self._initializer = initializer
+        self._enable_serialize = serialize_embeddings
 
-    @property
-    def min_frequency(self):
-        return self._min_frequency
+    def get_embeddings(self, normalize=False):
+        if self._embeddings is None:
+            raise RuntimeError("cannot retrieve embeddings")
+        n_elements, dim = self._embeddings.shape
+        n_uninitialized = len(self) - n_elements
+        if n_uninitialized > 0:
+            new_vectors = self._initializer(
+                (n_uninitialized, dim), self._embeddings.dtype)
+            self._embeddings = np.r_[self._embeddings, new_vectors]
+        return self.normalize(self._embeddings, normalize) \
+            if normalize else self._embeddings
+
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        if not self._enable_serialize:
+            state['_embeddings'] = None
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+
+    @classmethod
+    def from_words(cls, iterable, unknown="<UNK>", **kwargs):
+        v = cls(unknown, **kwargs)
+        for word in iterable:
+            v.add(word)
+        return v
+
+    @staticmethod
+    def random_normal(shape, dtype=np.float32):
+        return np.random.normal(0, 1, shape).astype(dtype, copy=False)
+
+    @staticmethod
+    def random_uniform(shape, dtype=np.float32):
+        return np.random.uniform(-1, 1, shape).astype(dtype, copy=False)
+
+    @staticmethod
+    def normalize(embeddings, method='l2'):
+        if method == 'l2':
+            l2 = np.linalg.norm(embeddings, axis=1, keepdims=True)
+            l2[l2 == 0] = 1
+            embeddings = embeddings / l2
+        elif method == 'zscore':
+            mean = np.mean(embeddings, axis=1, keepdims=True)
+            std = np.std(embeddings, axis=1, keepdims=True)
+            embeddings = (embeddings - mean) / std
+        else:
+            raise ValueError('unsupported method was specified: {}'
+                             .format(method))
+        return embeddings
 
 
 def split(sentence):
@@ -305,7 +358,7 @@ class Preprocessor(object):
 
 
 def load_embeddings(embed_file, vocab_file=None, dtype=np.float32):
-    vocabulary = Vocab()
+    vocabulary = Dict()
     embeddings = []
     if vocab_file:
         with open(embed_file) as ef, open(vocab_file) as vf:
@@ -385,6 +438,7 @@ class EmbeddingPreprocessor(Preprocessor):
         self._embeddings = embeddings
         self._embed_size = embed_size
         self._initializer = initializer
+        self._deserialized = False
 
         super(EmbeddingPreprocessor, self).__init__(
             unknown, pad, tokenizer, preprocess,
@@ -402,6 +456,7 @@ class EmbeddingPreprocessor(Preprocessor):
         return self._embeddings
 
     def get_embeddings(self, normalize=False):
+        # if self._deserialized:
         uninitialized_vocab_size = \
             self.vocabulary_size - self._embeddings.shape[0]
         if uninitialized_vocab_size > 0:
@@ -429,5 +484,6 @@ class EmbeddingPreprocessor(Preprocessor):
         return state
 
     def __setstate__(self, state):
+        state['_deserialized'] = True
         self.__dict__.update(state)
         self.reset_embeddings(self._embed_size)
