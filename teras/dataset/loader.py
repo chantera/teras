@@ -10,7 +10,7 @@ class Loader(ABC):
         raise NotImplementedError
 
 
-class CorpusLoader(Loader):
+class TextLoader(Loader):
 
     def __init__(self, reader):
         self._reader = reader

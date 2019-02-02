@@ -2,12 +2,12 @@ import pathlib
 import unittest
 
 import numpy as np
-from teras.dataset.loader import CorpusLoader
+from teras.dataset.loader import TextLoader
 from teras.io.reader import ConllReader
 from teras.preprocessing import text
 
 
-class DataLoader(CorpusLoader):
+class DataLoader(TextLoader):
 
     def __init__(self,
                  word_embed_size=100,
