@@ -285,12 +285,14 @@ class Preprocessor(object):
         return self
 
     def transform(self, document, length=None):
-        ids = np.array([self.vocab[token] for token
-                        in self.tokenize(document)], self._dtype)
-        return self.pad(ids, length) if length is not None else ids
+        return self.fit_transform(document, length, False)
 
-    def fit_transform(self, document, length=None):
-        ids = np.array([self.vocab.add(token) for token
+    def fit_transform(self, document, length=None, fit=True):
+        if (callable(fit) and fit()) or fit:
+            _convert = self.vocab.add
+        else:
+            _convert = self.vocab.__getitem__
+        ids = np.array([_convert(token) for token
                         in self.tokenize(document)], self._dtype)
         return self.pad(ids, length) if length is not None else ids
 

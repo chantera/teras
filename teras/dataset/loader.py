@@ -15,37 +15,31 @@ class CorpusLoader(Loader):
     def __init__(self, reader):
         self._reader = reader
         self._processors = {}
-        self._train = False
+        self.train = False
 
     def add_processor(self, name, **kwargs):
-        for cls in (text.EmbeddingPreprocessor, text.Preprocessor):
-            try:
-                self._processors[name] = cls(**kwargs)
-                break
-            except TypeError:
-                continue
-        else:
-            raise TypeError('Preprocessor not found for the specified args: {}'
-                            .format(kwargs))
+        self._processors[name] = text.Preprocessor(**kwargs)
 
     def get_processor(self, name):
         return self._processors[name]
 
     def get_embeddings(self, name, normalize=False):
-        if not isinstance(self._processors[name], text.EmbeddingPreprocessor):
-            raise TypeError('preprocessor[name={}] '
-                            'is not an EmbeddingPreprocessor'.format(name))
-        return self._processors[name].get_embeddings(normalize)
+        if isinstance(self._processors[name].vocab, text.EmbeddingVocab):
+            return self._processors[name].vocab.get_embeddings(normalize)
+        return None
 
     @abstractmethod
     def map(self, item):
         raise NotImplementedError
 
+    def map_attr(self, attr, value, update=True):
+        return self._processors[attr].fit_transform(value, fit=update)
+
     def filter(self, item):
         return True
 
     def load(self, file, train=False, size=None, bucketing=False):
-        self._train = train
+        self.train = train
         self._reader.set_file(file)
         if size is None:
             samples = [self.map(item) for item in self._reader
