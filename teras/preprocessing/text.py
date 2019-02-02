@@ -6,10 +6,10 @@ import warnings
 import numpy as np
 
 
-class Vocab(UserDict):
+class Dict(UserDict):
 
     def __init__(self):
-        super(Vocab, self).__init__()
+        super().__init__()
         self._index = -1
         self._id2word = {}
 
@@ -107,30 +107,41 @@ class Vocab(UserDict):
         return default
 
 
-class _VocabWrapper(object):
+class Vocab(object):
 
-    def __init__(self, vocabulary, unknown):
-        self._vocabulary = vocabulary
-        self._unknown_id = self._vocabulary[unknown]
+    def __init__(self, unknown):
+        self._dict = Dict()
+        self._unknown_id = self._dict[unknown]
 
-    def fit(self, word):
-        self._vocabulary.add(word)
-        return self
+    def add(self, word):
+        return self._dict.add(word)
 
-    def transform(self, word):
-        return self._vocabulary.get(word, self._unknown_id)
+    def __getitem__(self, word):
+        return self._dict[word] if word in self._dict else self._unknown_id
 
-    def fit_transform(self, word):
-        return self._vocabulary.add(word)
+    def __contains__(self, word):
+        return word in self._dict
+
+    def __len__(self):
+        """including the unknown word"""
+        return self._dict.size
+
+    def lookup(self, id):
+        return self._dict.lookup(id)
+
+    def __repr__(self):
+        return repr(self._dict)
 
     @property
-    def vocabulary(self):
-        return self._vocabulary
-
-    @property
-    def unknown_id(self):
+    def unknown(self):
         return self._unknown_id
 
+    @classmethod
+    def from_words(cls, iterable, unknown):
+        v = cls(unknown)
+        for word in iterable:
+            v.add(word)
+        return v
 
 class _FrequentVocabWrapper(_VocabWrapper):
 
