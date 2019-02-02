@@ -126,5 +126,38 @@ class TestVocab(unittest.TestCase):
                 x1[1], [0.10204, -0.12792, -0.8443, -0.12181])
 
 
+class TestPreprocessor(unittest.TestCase):
+
+    def setUp(self):
+        self.preprocessor = text.Preprocessor()
+
+    def test_preprocessing(self):
+        sentence = ("Pierre Vinken , 61 years old , will join the board "
+                    "as a nonexecutive director Nov. 29 .")
+
+        ids = self.preprocessor.transform(sentence)
+        expected = np.zeros(18, dtype=np.int32)
+        np.testing.assert_array_equal(ids, expected)
+
+        ids = self.preprocessor.fit(sentence).transform(sentence)
+        expected = np.array([1, 2, 3, 4, 5, 6, 3, 7, 8, 9, 10,
+                             11, 12, 13, 14, 15, 16, 17], dtype=np.int32)
+        np.testing.assert_array_equal(ids, expected)
+
+        ids = self.preprocessor.fit_transform("The Lorillard spokeswoman")
+        expected = np.array([9, 18, 19], dtype=np.int32)
+        np.testing.assert_array_equal(ids, expected)
+
+        ids = self.preprocessor.pad(ids, 8)
+        expected = np.array([9, 18, 19, -1, -1, -1, -1, -1], dtype=np.int32)
+        np.testing.assert_array_equal(ids, expected)
+
+        ids = self.preprocessor.fit_transform(
+            "the Dutch publishing group", length=12)
+        expected = np.array(
+            [9, 20, 21, 22, -1, -1, -1, -1, -1, -1, -1, -1], dtype=np.int32)
+        np.testing.assert_array_equal(ids, expected)
+
+
 if __name__ == "__main__":
     unittest.main()
