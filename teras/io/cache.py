@@ -16,8 +16,16 @@ def _resolve_path(key, dir='', ext='', prefix='', hash_len=16):
 class Cache(object):
     LOG_LEVEL = logging.DEBUG
 
-    def __init__(self, key, dir='', ext='.pkl', prefix='',
+    def __init__(self, key, dir='', ext='.pkl', prefix='', mkdir=False,
                  serializer=None, deserializer=None, logger=None):
+        dir = os.path.abspath(os.path.expanduser(dir))
+        if os.path.isdir(dir):
+            pass
+        elif mkdir:
+            os.makedirs(dir)
+        else:
+            raise FileNotFoundError(
+                "cache dir was not found: `{}`".format(dir))
         self._file = _resolve_path(key, dir, ext, prefix)
         self._serializer = serializer \
             if serializer is not None else pickle
@@ -32,15 +40,19 @@ class Cache(object):
         with open(self._file, 'rb') as f:
             return self._serializer.load(f)
 
-    def load_or_create(self, factory):
-        try:
-            self.load()
-        except FileNotFoundError:
+    def load_or_create(self, factory, refresh=False):
+        if not refresh:
+            try:
+                return self.load()
+            except FileNotFoundError:
+                self._logger.log(
+                    self.LOG_LEVEL, "missing cache - creating a new object")
+        else:
             self._logger.log(
-                self.LOG_LEVEL, "missing cache - creating a new object")
-            obj = factory()
-            self.dump(obj)
-            return obj
+                self.LOG_LEVEL, "updating cache - creating a new object")
+        obj = factory()
+        self.dump(obj)
+        return obj
 
     def dump(self, obj):
         self._logger.log(
@@ -51,16 +63,19 @@ class Cache(object):
 
 def load(key, dir='', ext='.pkl', prefix='',
          serializer=None, deserializer=None, logger=None):
-    return Cache(key, dir, ext, prefix, serializer, deserializer, logger) \
-        .load()
+    return Cache(key, dir, ext, prefix, False,
+                 serializer, deserializer, logger).load()
 
 
-def load_or_create(key, factory, dir='', ext='.pkl', prefix='',
+def load_or_create(key, factory, refresh=False,
+                   dir='', ext='.pkl', prefix='', mkdir=False,
                    serializer=None, deserializer=None, logger=None):
-    return Cache(key, dir, ext, prefix, serializer, deserializer, logger) \
-        .load_or_create(factory)
+    return Cache(key, dir, ext, prefix, mkdir,
+                 serializer, deserializer, logger) \
+        .load_or_create(factory, refresh)
 
 
-def dump(obj, key, dir='', ext='.pkl', prefix='',
+def dump(obj, key, dir='', ext='.pkl', prefix='', mkdir=False,
          serializer=None, deserializer=None, logger=None):
-    Cache(key, dir, ext, prefix, serializer, deserializer, logger).dump(obj)
+    Cache(key, dir, ext, prefix, mkdir, serializer, deserializer, logger) \
+        .dump(obj)
