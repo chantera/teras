@@ -174,11 +174,8 @@ class Saver(Listener):
         self._interval = interval
         self._save_from = save_from
         self._serializer = serializer if serializer is not None else pickle
-        if logger is None:
-            logger = logging.getLogger('teras')
-            logger.addHandler(logging.NullHandler())
-            logger.setLevel(logging.DEBUG)
-        self._logger = logger
+        self._logger = logger \
+            if logger is not None else logging.getLogger(__name__)
 
     def on_train_begin(self, data):
         if self._context is not None:
