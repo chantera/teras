@@ -275,7 +275,7 @@ class Preprocessor(object):
                  dtype=np.int32):
         self.vocab = vocab if vocab is not None else Vocab()
         self.tokenizer = tokenizer
-        self.preprocess = preprocess if preprocess is not None else raw
+        self.preprocess = preprocess if preprocess else raw
         self.pad_id = self.vocab[pad] if pad is not None else -1
         self._dtype = dtype
 

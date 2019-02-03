@@ -17,8 +17,8 @@ class TextLoader(Loader):
         self._processors = {}
         self.train = False
 
-    def add_processor(self, name, **kwargs):
-        self._processors[name] = text.Preprocessor(**kwargs)
+    def add_processor(self, name, *args, **kwargs):
+        self._processors[name] = text.Preprocessor(*args, **kwargs)
 
     def get_processor(self, name):
         return self._processors[name]
