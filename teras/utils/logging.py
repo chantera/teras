@@ -1,5 +1,5 @@
 from enum import Enum
-from datetime import datetime
+import datetime
 import logging
 import logging.config
 import os
@@ -34,6 +34,8 @@ logging.addLevelName(NOTSET, 'none')
 BASIC_FORMAT = logging.BASIC_FORMAT
 APP_FORMAT = "%(asctime)-15s\t%(accessid)s\t[%(levelname)s]\t%(message)s"
 DATE_FORMAT = "%Y-%m-%d %H:%M:%S.%f %Z"
+
+LOCAL_TZ = datetime.datetime.now(datetime.timezone.utc).astimezone().tzinfo
 
 
 def _format_time(format, t, nsecs=None, precision=6):
@@ -229,9 +231,9 @@ class AppLogger(Logger):
                              .format(os.path.sep, config['filename']))
 
         basename, ext = os.path.splitext(config['filename'])
-        basename = (config['fileprefix']
-                    + datetime.now().strftime(basename)
-                    + config['filesuffix'])
+        basename = _format_time(
+            basename, logging.Formatter.converter(self._accesssec))
+        basename = config['fileprefix'] + basename + config['filesuffix']
 
         if enable_numbering:
             number = 0
@@ -264,7 +266,7 @@ class AppLogger(Logger):
 
     @property
     def accesstime(self):
-        return self._accesssec
+        return datetime.datetime.fromtimestamp(self._accesssec, LOCAL_TZ)
 
 
 DEFAULT_CONFIG = {
