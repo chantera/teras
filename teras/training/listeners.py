@@ -19,9 +19,10 @@ class ProgressBar(Listener):
         >>>     pbar.update(32)
         >>> pbar.close()
     """
+    name = "progressbar"
 
-    def __init__(self, factory, name="progressbar", **kwargs):
-        super().__init__(name, **kwargs)
+    def __init__(self, factory, **kwargs):
+        super().__init__(**kwargs)
         self._pbar = None
         self._factory = factory
 
@@ -63,9 +64,10 @@ def report(values):
 
 
 class Reporter(Listener):
+    name = "reporter"
 
-    def __init__(self, logger, name="reporter", **kwargs):
-        super(Reporter, self).__init__(name, **kwargs)
+    def __init__(self, logger, **kwargs):
+        super().__init__(**kwargs)
         self._logger = logger
         self._logs = {}
         self._reported = 0
@@ -160,11 +162,11 @@ class Reporter(Listener):
 
 
 class Saver(Listener):
+    name = "saver"
 
-    def __init__(self, model, basename, directory='', context=None,
-                 interval=1, save_from=None, serializer=None,
-                 logger=None, name="saver", **kwargs):
-        super().__init__(name, **kwargs)
+    def __init__(self, model, basename, directory='', context=None, interval=1,
+                 save_from=None, serializer=None, logger=None, **kwargs):
+        super().__init__(**kwargs)
         self._model = model
         self._basename = os.path.join(os.path.expanduser(directory), basename)
         self._context = context
@@ -177,23 +179,17 @@ class Saver(Listener):
         self._logger = logger \
             if logger is not None else logging.getLogger(__name__)
 
-    def on_train_begin(self, data):
-        if self._context is not None:
-            context_file = self._basename + '.context'
-            self._logger.info(
-                "saving the context to {} ...".format(context_file))
-            with open(context_file, 'wb') as f:
-                self.serializer.dump(self._context, f)
+    def save_context(self, context):
+        file = self._basename + '.context'
+        self._logger.info("saving the context to {} ...".format(file))
+        with open(file, 'wb') as f:
+            self._serializer.dump(context, f)
 
-    def on_epoch_end(self, data):
-        epoch = data['epoch']
-        if self._save_from is not None and data['epoch'] < self._save_from:
-            return
-        if epoch % self._interval == 0:
-            model_file = "{}.{}.pkl".format(self._basename, epoch)
-            self._logger.info("saving the model to {} ...".format(model_file))
-            with open(model_file, 'wb') as f:
-                self.serializer.dump(self._model, f)
+    def save_model(self, model, suffix=''):
+        file = "{}{}.pkl".format(self._basename, suffix)
+        self._logger.info("saving the model to {} ...".format(file))
+        with open(file, 'wb') as f:
+            self._serializer.dump(model, f)
 
     def load_context(self, model_file, deserializer=None):
         if deserializer is None:
@@ -204,3 +200,14 @@ class Saver(Listener):
         with open(context_file, 'rb') as f:
             context = collections.ImmutableMap(deserializer.load(f))
         return context
+
+    def on_train_begin(self, data):
+        if self._context is not None:
+            self.save_context(self._context)
+
+    def on_epoch_end(self, data):
+        epoch = data['epoch']
+        if self._save_from is not None and epoch < self._save_from:
+            return
+        if epoch % self._interval == 0:
+            self.save_model(self._model, suffix='.' + str(epoch))

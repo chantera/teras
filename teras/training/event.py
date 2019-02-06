@@ -10,9 +10,12 @@ class Event(Enum):
 
 
 class Listener(Callable):
+    name = None
 
-    def __init__(self, name, **kwargs):
-        self.name = name
+    def __init__(self, **kwargs):
+        self.name = kwargs.get('name', self.name)
+        if not isinstance(self.name, str) or self.name == '':
+            raise TypeError('listener.name must be a non-empty str')
         for k, v in kwargs.items():
             if callable(v):
                 self.implement(k, v)
