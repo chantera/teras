@@ -27,8 +27,11 @@ class Trainer(Dispatcher):
         self._converter = None
         self._reporter = None
 
-    def configure(self, config, **kwargs):
-        assert isinstance(config, dict)
+    def configure(self, config=None, **kwargs):
+        if config is None:
+            config = {}
+        elif not isinstance(config, dict):
+            raise TypeError("`config` must be a dict")
         config.update(kwargs)
         if 'update' in config:
             self._update = config['update']
@@ -41,38 +44,31 @@ class Trainer(Dispatcher):
         if 'converter' in config:
             self._converter = config['converter']
 
-    def fit(self,
-            x,
-            y=None,
-            batch_size=32,
-            epochs=10,
-            validation_data=None):
-        if isinstance(x, Dataset):
-            train_dataset = x
-            assert y is None
-        elif y is not None:
-            train_dataset = Dataset(x, y)
+    def fit(self, data, valid_data=None, epochs=10, batch_size=32):
+        if isinstance(data, Dataset):
+            train_dataset = data
+        elif isinstance(data, (tuple, list)) and len(data) == 2:
+            train_dataset = Dataset(*data)
         else:
-            raise ValueError('incomplete input data: x={}, y={}'
-                             .format(type(x), y))
+            raise ValueError('invalid data: {}'.format(type(data)))
 
-        if validation_data:
+        if valid_data:
             do_validation = True
-            if isinstance(validation_data, Dataset):
-                val_dataset = validation_data
-            elif len(validation_data) == 2:
-                val_x, val_y = validation_data
-                val_dataset = Dataset(val_x, val_y)
+            if isinstance(valid_data, Dataset):
+                val_dataset = valid_data
+            elif isinstance(valid_data, (tuple, list)) \
+                    and len(valid_data) == 2:
+                val_dataset = Dataset(*valid_data)
             else:
-                raise ValueError('When passing validation_data, '
+                raise ValueError('When passing valid_data, '
                                  'it must be dataset or contain '
-                                 '2 (x_val, y_val) items: {}'
-                                 .format(type(validation_data)))
+                                 'two (x_val, y_val) items: {}'
+                                 .format(type(valid_data)))
         else:
             do_validation = False
 
         self._reporter = listeners.Reporter(logging.getLogger())
-        self.attach_listener(self._reporter, priority=150)
+        self.add_listener(self._reporter, priority=150)
         if self._acc_func is not None:
             def _report_accuracy(data):
                 listeners.report(

@@ -76,7 +76,7 @@ class Dispatcher(object):
             self._hooks[event].remove(hook)
             del self._hooks[(event, hook)]
 
-    def attach_listener(self, listener, priority=100, update=False):
+    def add_listener(self, listener, priority=100, update=False):
         self.check_listener(listener)
         if update:
             self.detach_listener(listener)
@@ -86,7 +86,7 @@ class Dispatcher(object):
                     self.add_hook(event, listener.get_handler(event), priority)
             self._listeners[listener.name] = listener
 
-    def detach_listener(self, listener):
+    def remove_listener(self, listener):
         if isinstance(listener, str):
             listener = self.get_listener(listener)
         self.check_listener(listener)
