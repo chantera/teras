@@ -1,5 +1,6 @@
 from collections import Iterable, UserDict
 import copy
+import os
 import re
 
 import numpy as np
@@ -227,7 +228,9 @@ class EmbeddingVocab(Vocab):
 def load_embeddings(embed_file, vocab_file=None, dtype=np.float32):
     vocabulary = Dict()
     embeddings = []
+    embed_file = os.path.expanduser(embed_file)
     if vocab_file:
+        vocab_file = os.path.expanduser(vocab_file)
         with open(embed_file) as ef, open(vocab_file) as vf:
             for line1, line2 in zip(ef, vf):
                 word = line2.strip()
