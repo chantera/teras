@@ -83,7 +83,7 @@ class Reporter(Listener):
         for name, value in values.items():
             if "accuracy" in name:
                 accuracy = self._logs.get(name, 0.0)
-                if hasattr(value, "__len__") and len(value) == 2:
+                if isinstance(value, (tuple, list)) and len(value) == 2:
                     if isinstance(accuracy, float):
                         accuracy = [0, 0]
                     accuracy[0] += value[0]
