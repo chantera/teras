@@ -232,4 +232,6 @@ class Saver(Listener):
                 self._logger.info("update the best score - new: {}, old: {}"
                                   .format(value, self._best_value))
                 self._best_value = value
-            self.save_model(self._model, suffix='.' + str(epoch))
+                self.save_model(self._model)
+            else:
+                self.save_model(self._model, suffix='.' + str(epoch))
