@@ -219,6 +219,11 @@ class EmbeddingVocab(Vocab):
             mean = np.mean(embeddings, axis=1, keepdims=True)
             std = np.std(embeddings, axis=1, keepdims=True)
             embeddings = (embeddings - mean) / std
+        elif method == 'scale':
+            std = np.std(embeddings, axis=1, keepdims=True)
+            embeddings /= std
+        elif callable(method):
+            embeddings = method(embeddings)
         else:
             raise ValueError('unsupported method was specified: {}'
                              .format(method))
