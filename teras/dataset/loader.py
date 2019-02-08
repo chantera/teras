@@ -54,6 +54,6 @@ class TextLoader(Loader):
                 samples.append(self.map(item))
 
         if bucketing:
-            return BucketDataset(samples, key=0, equalize_by_key=False)
+            return BucketDataset(samples, key=0, equalize_by_key=True)
         else:
             return Dataset(samples)
