@@ -89,7 +89,7 @@ class Reporter(Listener):
                     accuracy[0] += value[0]
                     accuracy[1] += value[1]
                 else:
-                    accuracy += float(accuracy)
+                    accuracy += float(value)
                 values[name] = accuracy
         self._logs.update(values)
         self._reported += 1
