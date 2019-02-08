@@ -165,7 +165,8 @@ class Saver(Listener):
     name = "saver"
 
     def __init__(self, model, basename, directory='', context=None, interval=1,
-                 save_from=None, serializer=None, logger=None, **kwargs):
+                 save_from=None, save_best=False, evaluate=None,
+                 serializer=None, logger=None, **kwargs):
         super().__init__(**kwargs)
         self._model = model
         self._basename = os.path.join(os.path.expanduser(directory), basename)
@@ -175,6 +176,9 @@ class Saver(Listener):
                              "actual('{}')".format(type(interval).__name__))
         self._interval = interval
         self._save_from = save_from
+        self._save_best = save_best
+        self._evaluate = evaluate
+        self._best_value = -float('inf')
         self._serializer = serializer if serializer is not None else pickle
         self._logger = logger \
             if logger is not None else logging.getLogger(__name__)
@@ -205,9 +209,27 @@ class Saver(Listener):
         if self._context is not None:
             self.save_context(self._context)
 
+    def on_epoch_validate_end(self, data):
+        if self._save_best:
+            self._trigger_save(data)
+
     def on_epoch_end(self, data):
+        if not self._save_best:
+            self._trigger_save(data)
+
+    def _trigger_save(self, data):
         epoch = data['epoch']
         if self._save_from is not None and epoch < self._save_from:
             return
         if epoch % self._interval == 0:
+            if self._save_best:
+                if callable(self._evaluate):
+                    value = self._evaluate(data)
+                else:
+                    value = -data['loss']
+                if value <= self._best_value:
+                    return
+                self._logger.info("update the best score - new: {}, old: {}"
+                                  .format(value, self._best_value))
+                self._best_value = value
             self.save_model(self._model, suffix='.' + str(epoch))
