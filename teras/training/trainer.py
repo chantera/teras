@@ -1,5 +1,3 @@
-import math
-
 from teras.dataset import Dataset
 from teras.training import listeners
 from teras.training.event import Dispatcher, TrainEvent
@@ -124,14 +122,14 @@ class Trainer(Dispatcher):
                  logs={}, train=True):
         logs = logs.copy()
         logs['size'] = dataset.size
-        num_batches = math.ceil(logs['size'] / batch_size)
+        iterator = dataset.batch(batch_size, colwise=True, shuffle=train)
+        num_batches = len(iterator)
         logs['num_batches'] = num_batches
         logs['loss'] = None
         self.notify(TrainEvent.EPOCH_TRAIN_BEGIN
                     if train else TrainEvent.EPOCH_VALIDATE_BEGIN, logs)
         logs['loss'] = 0.0
-        for batch_index, batch in enumerate(
-                dataset.batch(batch_size, colwise=True, shuffle=train)):
+        for batch_index, batch in enumerate(iterator):
             xs, ts = batch[:-1], batch[-1]
             if len(xs) == 1:
                 xs = [convert(xs[0])]

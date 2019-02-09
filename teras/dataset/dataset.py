@@ -1,6 +1,24 @@
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence, Sized
 
 import numpy as np
+
+
+class BatchIterator(Iterator, Sized):
+
+    def __init__(self, iterator, size):
+        if not isinstance(size, int):
+            raise TypeError("iterator size must be an int value")
+        self._iterator = iterator
+        self._size = size
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        return next(self._iterator)
+
+    def __len__(self):
+        return self._size
 
 
 def _get_row_iterator(samples, batches):
@@ -55,9 +73,10 @@ class Dataset(Sequence):
         batches = [indices[i: i + size]
                    for i in range(0, self._len, size)]
         if colwise:
-            return _get_col_iterator(self._columns, batches)
+            iterator = _get_col_iterator(self._columns, batches)
         else:
-            return _get_row_iterator(self._samples, batches)
+            iterator = _get_row_iterator(self._samples, batches)
+        return BatchIterator(iterator, size=len(batches))
 
     def __len__(self):
         return self._len
@@ -137,6 +156,7 @@ class BucketDataset(Dataset):
         if shuffle:
             np.random.shuffle(buckets)
         if colwise:
-            return _get_col_iterator(self._columns, buckets)
+            iterator = _get_col_iterator(self._columns, buckets)
         else:
-            return _get_row_iterator(self._samples, buckets)
+            iterator = _get_row_iterator(self._samples, buckets)
+        return BatchIterator(iterator, size=len(buckets))
