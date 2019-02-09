@@ -122,12 +122,12 @@ class BucketDataset(Dataset):
             bucket = []
             accum_length = 0
             for length, index in lengths:
-                bucket.append(index)
-                accum_length += int(length)
-                if accum_length >= size:
+                if accum_length + int(length) > size:
                     buckets.append(np.array(bucket))
                     bucket = []
                     accum_length = 0
+                bucket.append(index)
+                accum_length += int(length)
             if bucket:
                 buckets.append(np.array(bucket))
         else:

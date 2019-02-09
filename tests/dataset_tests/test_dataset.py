@@ -71,24 +71,24 @@ class TestDataset(unittest.TestCase):
         dataset = BucketDataset(self.samples, key=0, equalize_by_key=True)
         n_words_sum = 0
         batch_min_max_list = []
-        tail = None
         for i, batch in enumerate(
                 dataset.batch(size=1000, shuffle=True, colwise=False)):
             lengths = [len(sample[0]) for sample in batch]
             n_words = sum(lengths)
-            if n_words < 1000:
-                self.assertTrue(tail is None)
-                tail = i
-            else:
-                self.assertTrue(n_words < 1000 + lengths[-1])
+            self.assertLessEqual(n_words, 1000)
             batch_min_max = min(lengths), max(lengths)
             batch_min_max_list.append(batch_min_max)
             n_words_sum += n_words
-        self.assertTrue(len(batch_min_max_list) <= np.ceil(n_words_sum / 1000))
+        n_batches = len(batch_min_max_list)
+        average_len = n_words_sum / len(dataset)
+        self.assertLessEqual(
+            n_batches, np.ceil(n_words_sum / (1000 - int(average_len))))
+        self.assertGreaterEqual(
+            n_batches, np.ceil(n_words_sum / 1000))
         batch_min_max_list.sort(key=lambda x: x[0] * 10 + x[1])
         for i in range(1, len(batch_min_max_list)):
-            self.assertTrue(batch_min_max_list[i][0]
-                            >= batch_min_max_list[i - 1][1])
+            self.assertGreaterEqual(
+                batch_min_max_list[i][0], batch_min_max_list[i - 1][1])
 
 
 if __name__ == "__main__":
