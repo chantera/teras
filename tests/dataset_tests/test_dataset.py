@@ -35,7 +35,7 @@ class TestDataset(unittest.TestCase):
                                 for j, sample in enumerate(batch)))
         for i, batch in enumerate(
                 dataset.batch(size=32, shuffle=False, colwise=True)):
-            self.assertTrue(len(batch) == 3)
+            self.assertEqual(len(batch), 3)
             self.assertTrue((i < 46 and len(batch[0]) == 32)
                             or (i == 46 and len(batch[0]) == 28))
             self.assertTrue(all(index == i * 32 + j
@@ -54,18 +54,18 @@ class TestDataset(unittest.TestCase):
             lengths = [len(sample[0]) for sample in batch]
             batch_size = len(lengths)
             if batch_size == 28:
-                self.assertTrue(tail is None)
+                self.assertIsNone(tail)
                 tail = i
             else:
-                self.assertTrue(batch_size == 32)
+                self.assertEqual(batch_size, 32)
             batch_min_max = min(lengths), max(lengths)
             batch_min_max_list.append(batch_min_max)
-        self.assertTrue(len(batch_min_max_list) == 47)
+        self.assertEqual(len(batch_min_max_list), 47)
         batch_min_max_list.sort(key=lambda x: x[0] * 10 + x[1])
         print("min_max: {}".format(batch_min_max_list), file=sys.stderr)
         for i in range(1, len(batch_min_max_list)):
-            self.assertTrue(batch_min_max_list[i][0]
-                            >= batch_min_max_list[i - 1][1])
+            self.assertGreaterEqual(
+                batch_min_max_list[i][0], batch_min_max_list[i - 1][1])
 
     def test_averaged_bucketing(self):
         dataset = BucketDataset(self.samples, key=0, equalize_by_key=True)
