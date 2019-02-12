@@ -186,6 +186,7 @@ class AppLogger(Logger):
             stream_handler.setLevel(config['verbosity'])
             stream_handler.setFormatter(
                 ColoredFormatter(config['fmt'], config['datefmt']))
+            stream_handler.addFilter(self._make_filter())
             self.addHandler(stream_handler)
 
         message = "LOG Start with ACCESSID=[%s] UNIQUEID=[%s] ACCESSTIME=[%s]"
@@ -210,7 +211,7 @@ class AppLogger(Logger):
         file_handler.setLevel(config['level'])
         file_handler.setFormatter(
             Formatter(config['fmt'], config['datefmt']))
-
+        file_handler.addFilter(self._make_filter())
         self.addHandler(file_handler)
 
     def _resolve_file(self, config, enable_numbering=False):
@@ -256,9 +257,11 @@ class AppLogger(Logger):
                              self._accesstime, processtime))
         super().finalize()
 
-    def filter(self, record):
-        record.accessid = self._accessid
-        return super().filter(record)
+    def _make_filter(self):
+        def _filter(record):
+            record.accessid = self.accessid
+            return record
+        return _filter
 
     @property
     def accessid(self):
