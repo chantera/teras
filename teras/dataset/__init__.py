@@ -1,4 +1,2 @@
-from teras.dataset.dataset import Dataset, GroupedDataset
-from teras.dataset import download, loader, mnist
-
-__all__ = ['Dataset', 'download', 'GroupedDataset', 'loader', 'mnist']
+from teras.dataset import loader  # NOQA
+from teras.dataset.dataset import Dataset, BucketDataset  # NOQA

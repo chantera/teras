@@ -5,8 +5,8 @@ from subprocess import check_output, CalledProcessError, STDOUT
 
 def _check(path):
     if type(path) is not str:
-        raise ValueError("path must be specified as str (actual: {})"
-                         .format(type(path)))
+        raise ValueError(
+            "path must be specified as str (actual: {})".format(type(path)))
     if not os.path.exists(path):
         raise FileNotFoundError(
             "no such file or directory: {}".format(path))
@@ -15,10 +15,19 @@ def _check(path):
 
 def _split(path):
     if os.path.isdir(path):
-        _dir, _file = path.rstrip(os.path.sep), None
+        dir, file = path.rstrip(os.path.sep), None
     else:
-        _dir, _file = os.path.split(path)
-    return _dir, _file
+        dir, file = os.path.split(path)
+    return dir, file
+
+
+def _set_cwd(d, path=None, check=True):
+    if path is not None:
+        if check:
+            _check(path)
+        dir = _split(path)[0]
+        if dir != '':
+            d['cwd'] = dir
 
 
 def _exec(command, suppress_error=True, **kwargs):
@@ -35,22 +44,26 @@ def _exec(command, suppress_error=True, **kwargs):
 def root(path=None, suppress_error=True):
     command = ['git', 'rev-parse', '--show-toplevel']
     kwargs = {}
-    if path is not None:
-        _check(path)
-        kwargs['cwd'] = _split(path)[0]
-
+    _set_cwd(kwargs, path)
     return _exec(command, suppress_error, **kwargs)
 
 
 @lru_cache(maxsize=1)
-def relpath(path, suppress_error=True):
+def hash(path=None, short=False, suppress_error=True):
+    command = ['git', 'rev-parse',
+               ('--short' if short else '--verify'), 'HEAD']
+    kwargs = {}
+    _set_cwd(kwargs, path)
+    return _exec(command, suppress_error, **kwargs)
+
+
+@lru_cache(maxsize=1)
+def relpath(path=None, suppress_error=True):
     command = ['git', 'rev-parse', '--show-prefix']
     kwargs = {}
-    if path is not None:
-        _check(path)
-        kwargs['cwd'], _file = _split(path)
-
-    _relpath = _exec(command, suppress_error, **kwargs)
-    if _relpath is not None and _file is not None:
-        _relpath = os.path.join(_relpath, _file)
-    return _relpath
+    _set_cwd(kwargs, path)
+    file = _split(path)[1] if path else None
+    relpath = _exec(command, suppress_error, **kwargs)
+    if relpath is not None and file is not None:
+        relpath = os.path.join(relpath, file)
+    return relpath

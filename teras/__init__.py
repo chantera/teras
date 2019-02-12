@@ -9,7 +9,7 @@
 
 ================================================
 
-Copyright 2017 Hiroki Teranishi
+Copyright 2019 Hiroki Teranishi
 
 @author  Hiroki Teranishi
 @email   teranishihiroki@gmail.com
@@ -19,7 +19,7 @@ Copyright 2017 Hiroki Teranishi
 ------------------------------------------------------------------------------
 MIT License
 
-Copyright (c) 2017 Hiroki Teranishi
+Copyright (c) 2019 Hiroki Teranishi
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -42,15 +42,9 @@ SOFTWARE.
 
 """
 
-from teras import app
-from teras import base
-from teras import dataset
-from teras import framework
-from teras import io
-from teras import logging
-from teras import preprocessing
-from teras import training
-from teras import utils
-
-__all__ = ['app', 'base', 'dataset', 'framework', 'io', 'logging',
-           'preprocessing', 'training', 'utils']
+from teras import app  # NOQA
+from teras import dataset  # NOQA
+from teras import io  # NOQA
+from teras import preprocessing  # NOQA
+from teras import training  # NOQA
+from teras import utils  # NOQA

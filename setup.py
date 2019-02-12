@@ -9,6 +9,6 @@ setup(
     description='framework for deep learning applications',
     url='https://github.com/chantera/teras',
     license='MIT',
-    install_requires=['dill', 'numpy', 'progressbar2', 'python-dateutil'],
+    install_requires=['numpy>=1.11.0'],
     packages=find_packages(),
 )

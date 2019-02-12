@@ -1,5 +1,6 @@
 from collections.abc import Iterator
 import os
+import pathlib
 
 
 class Reader(Iterator):
@@ -12,6 +13,8 @@ class Reader(Iterator):
             self.reset()
 
     def set_file(self, file):
+        if isinstance(file, pathlib.PurePath):
+            file = str(file)
         file = os.path.expanduser(file)
         if not os.path.exists(file):
             raise FileNotFoundError("file was not found: '{}'"
@@ -211,6 +214,8 @@ class ConllReader(Reader):
 
 
 def read_conll(file, format='conll', extra_fields=None):
+    if isinstance(file, pathlib.PurePath):
+        file = str(file)
     with open(file, mode='r', encoding='utf-8') as f:
         return parse_conll(f, format, extra_fields)
 
@@ -263,6 +268,8 @@ class TreeReader(Reader):
 
 
 def read_tree(file, left_bracket='(', right_bracket=')'):
+    if isinstance(file, pathlib.PurePath):
+        file = str(file)
     with open(file, mode='r', encoding='utf-8') as f:
         return list(_parse_tree(f, left_bracket, right_bracket))
 

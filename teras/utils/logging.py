@@ -1,13 +1,12 @@
 from enum import Enum
-from datetime import datetime
+import datetime
 import logging
 import logging.config
 import os
 import sys
 import time
 import uuid
-
-from dateutil.tz import tzlocal
+import warnings
 
 
 DISABLE = sys.maxsize
@@ -32,14 +31,33 @@ logging.addLevelName(DEBUG, 'debug')
 logging.addLevelName(TRACE, 'trace')
 logging.addLevelName(NOTSET, 'none')
 
+BASIC_FORMAT = logging.BASIC_FORMAT
+APP_FORMAT = "%(asctime)-15s\t%(accessid)s\t[%(levelname)s]\t%(message)s"
+DATE_FORMAT = "%Y-%m-%d %H:%M:%S.%f %Z"
+
+LOCAL_TZ = datetime.datetime.now(datetime.timezone.utc).astimezone().tzinfo
+
+
+def _format_time(format, t, nsecs=None, precision=6):
+    if '%f' in format:
+        if nsecs is None:
+            if isinstance(t, float):
+                nsecs = int((t - int(t)) * 1e+6)
+            else:
+                nsecs = 0
+        if precision < 6:
+            nsecs = int(nsecs * (0.1 ** (6 - precision)))
+        format = format.replace(
+            '%f', '{:0{prec}d}'.format(nsecs, prec=precision))
+    return time.strftime(format, t)
+
 
 class Formatter(logging.Formatter):
 
     def formatTime(self, record, datefmt=None):
         ct = self.converter(record.created)
         if datefmt:
-            t = datefmt.replace('%f', '{:03d}'.format(int(record.msecs)))
-            s = time.strftime(t, ct)
+            s = _format_time(datefmt, ct, int(record.msecs * 1000), 3)
         else:
             t = time.strftime(self.default_time_format, ct)
             s = self.default_msec_format % (t, record.msecs)
@@ -73,7 +91,7 @@ class ColoredFormatter(Formatter):
     }
 
     def format(self, record):
-        s = super(ColoredFormatter, self).format(record)
+        s = super().format(record)
         level = record.levelno
         if level in ColoredFormatter.COLORS:
             s = (ColoredFormatter.FORMAT
@@ -85,7 +103,7 @@ class Logger(logging.Logger):
 
     def __init__(self, name, level=NOTSET, handlers=[]):
         self._initialized = False
-        super(Logger, self).__init__(name, level)
+        super().__init__(name, level)
         for hdlr in handlers:
             self.addHandler(hdlr)
         self.initialize()
@@ -130,16 +148,7 @@ def setRootLogger(root):
     Logger.manager.root = root
 
 
-logging.setLoggerClass(Logger)
-setRootLogger(RootLogger(WARNING))
-
-
-PATH_SEP = os.path.sep
-DATE_FORMAT = "%Y-%m-%d %H:%M:%S.%f %Z"
-
-
 class AppLogger(Logger):
-    FORMAT = "%(asctime)-15s\t%(accessid)s\t[%(levelname)s]\t%(message)s"
     _config = {
         'level': INFO,
         'verbosity': TRACE,
@@ -149,7 +158,7 @@ class AppLogger(Logger):
         'filemode': 'a',
         'fileprefix': '',
         'filesuffix': '',
-        'fmt': FORMAT,
+        'fmt': APP_FORMAT,
         'datefmt': DATE_FORMAT,
         'mkdir': False,
     }
@@ -159,13 +168,15 @@ class AppLogger(Logger):
         cls._config.update(kwargs)
 
     def initialize(self):
-        super(AppLogger, self).initialize()
+        super().initialize()
         config = AppLogger._config
-        now = datetime.now(tzlocal())
+        now = time.time()
         self._accessid = uuid.uuid4().hex[:6]
         self._uniqueid = "UNIQID"
         self._accesssec = now
-        self._accesstime = now.strftime(config['datefmt'])
+        self._accesstime = _format_time(
+            config['datefmt'], logging.Formatter.converter(now),
+            nsecs=int((now - int(now)) * 1e+6))
 
         if len(self.handlers) == 0:
             if config['filelog']:
@@ -175,6 +186,7 @@ class AppLogger(Logger):
             stream_handler.setLevel(config['verbosity'])
             stream_handler.setFormatter(
                 ColoredFormatter(config['fmt'], config['datefmt']))
+            stream_handler.addFilter(self._make_filter())
             self.addHandler(stream_handler)
 
         message = "LOG Start with ACCESSID=[%s] UNIQUEID=[%s] ACCESSTIME=[%s]"
@@ -199,7 +211,7 @@ class AppLogger(Logger):
         file_handler.setLevel(config['level'])
         file_handler.setFormatter(
             Formatter(config['fmt'], config['datefmt']))
-
+        file_handler.addFilter(self._make_filter())
         self.addHandler(file_handler)
 
     def _resolve_file(self, config, enable_numbering=False):
@@ -211,45 +223,45 @@ class AppLogger(Logger):
             elif config['mkdir']:
                 os.makedirs(logdir)
             else:
-                raise FileNotFoundError("logdir was not found: "
-                                        "'%s'" % logdir)
-            logdir += PATH_SEP
+                raise FileNotFoundError("logdir was not found: `%s`" % logdir)
         else:
             logdir = ''
 
-        if PATH_SEP in config['filename']:
+        if os.path.sep in config['filename']:
             raise ValueError("Invalid character '{}' is included: {}"
-                             .format(PATH_SEP, config['filename']))
+                             .format(os.path.sep, config['filename']))
 
         basename, ext = os.path.splitext(config['filename'])
-        basename = (config['fileprefix']
-                    + datetime.now().strftime(basename)
-                    + config['filesuffix'])
+        basename = _format_time(
+            basename, logging.Formatter.converter(self._accesssec))
+        basename = config['fileprefix'] + basename + config['filesuffix']
 
         if enable_numbering:
             number = 0
             while True:
-                logfile = logdir + basename + '-' + str(number) + ext
+                logfile = os.path.join(
+                    logdir, basename + '-' + str(number) + ext)
                 if not os.path.exists(logfile):
                     break
                 number += 1
         else:
-            logfile = logdir + basename + ext
+            logfile = os.path.join(logdir, basename + ext)
 
         return logfile
 
     def finalize(self):
-        processtime = ('%3.9f' % (datetime.now(tzlocal())
-                                  - self._accesssec).total_seconds())
+        processtime = ('%3.9f' % (time.time() - self._accesssec))
         message = ("LOG End with ACCESSID=[%s] UNIQUEID=[%s] "
                    "ACCESSTIME=[%s] PROCESSTIME=[%s]\n")
         self.info(message % (self._accessid, self._uniqueid,
                              self._accesstime, processtime))
-        super(AppLogger, self).finalize()
+        super().finalize()
 
-    def filter(self, record):
-        record.accessid = self._accessid
-        return super(AppLogger, self).filter(record)
+    def _make_filter(self):
+        def _filter(record):
+            record.accessid = self.accessid
+            return record
+        return _filter
 
     @property
     def accessid(self):
@@ -257,14 +269,10 @@ class AppLogger(Logger):
 
     @property
     def accesstime(self):
-        return self._accesssec
+        return datetime.datetime.fromtimestamp(self._accesssec, LOCAL_TZ)
 
 
-BASIC_FORMAT = logging.BASIC_FORMAT
-APP_FORMAT = AppLogger.FORMAT
-
-
-LOGGING = {
+DEFAULT_CONFIG = {
     'version': 1,
     'disable_existing_loggers': False,
     'formatters': {
@@ -286,18 +294,70 @@ LOGGING = {
         },
     },
     'root': {
-        'level': 'DEBUG',
+        'level': 'WARNING',
         'handlers': ['color'],
     }
 }
 
-logging.config.dictConfig(LOGGING)
+
+def defaultConfig():
+    if len(logging.root.handlers) == 0:
+        logging.config.dictConfig(DEFAULT_CONFIG)
+
+
+def critical(msg, *args, **kwargs):
+    if len(logging.root.handlers) == 0:
+        defaultConfig()
+    logging.root.critical(msg, *args, **kwargs)
+
+
+fatal = critical
+
+
+def error(msg, *args, **kwargs):
+    if len(logging.root.handlers) == 0:
+        defaultConfig()
+    logging.root.error(msg, *args, **kwargs)
+
+
+def exception(msg, *args, exc_info=True, **kwargs):
+    error(msg, *args, exc_info=exc_info, **kwargs)
+
+
+def warning(msg, *args, **kwargs):
+    if len(logging.root.handlers) == 0:
+        defaultConfig()
+    logging.root.warning(msg, *args, **kwargs)
+
+
+def warn(msg, *args, **kwargs):
+    warnings.warn("The 'warn' function is deprecated, "
+                  "use 'warning' instead", DeprecationWarning, 2)
+    warning(msg, *args, **kwargs)
+
+
+def info(msg, *args, **kwargs):
+    if len(logging.root.handlers) == 0:
+        defaultConfig()
+    logging.root.info(msg, *args, **kwargs)
+
+
+def debug(msg, *args, **kwargs):
+    if len(logging.root.handlers) == 0:
+        defaultConfig()
+    logging.root.debug(msg, *args, **kwargs)
 
 
 def trace(msg, *args, **kwargs):
     if len(logging.root.handlers) == 0:
-        logging.basicConfig()
+        defaultConfig()
     logging.root.trace(msg, *args, **kwargs)
+
+
+def log(level, msg, *args, **kwargs):
+    if len(logging.root.handlers) == 0:
+        defaultConfig()
+    logging.root.log(level, msg, *args, **kwargs)
 
 
 e = logging.error
@@ -305,6 +365,12 @@ w = logging.warning
 i = logging.info
 d = logging.debug
 v = trace
+
+
+logging.setLoggerClass(Logger)
+setRootLogger(RootLogger(WARNING))
+
+logging.getLogger(__name__.split('.')[0]).addHandler(logging.NullHandler())
 
 
 for module in logging.__all__:
