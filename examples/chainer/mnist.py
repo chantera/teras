@@ -1,95 +1,73 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
-
 import chainer
-import chainer.functions as F
-
+import numpy as np
+from teras import training
 from teras.app import App, arg
-import teras.dataset
-from teras.framework.chainer import config as chainer_config, to_device
-from teras.framework.chainer.model import MLP
-import teras.logging as Log
-from teras.training import Trainer
+from tqdm import tqdm
 
 
-def train(n_epoch=20,
-          batch_size=100,
-          n_layers=3,
-          n_units=1000,
-          dropout=0.2,
-          gpu=-1):
+class MLP(chainer.Chain):
 
-    train, test = teras.dataset.get_mnist()
-    train_x, train_y = train
-    test_x, test_y = test
+    def __init__(self, n_units, n_out):
+        super(MLP, self).__init__()
+        with self.init_scope():
+            self.l1 = chainer.links.Linear(None, n_units)
+            self.l2 = chainer.links.Linear(None, n_units)
+            self.l3 = chainer.links.Linear(None, n_out)
 
-    Log.v('')
-    Log.i('--------------------------------')
-    Log.i('# Minibatch-size: {}'.format(batch_size))
-    Log.i('# epoch: {}'.format(n_epoch))
-    Log.i('# gpu: {}'.format(gpu))
-    Log.i('# model: {}'.format(MLP))
-    Log.i('# layer: {}'.format(n_layers))
-    Log.i('# unit: {}'.format(n_units))
-    Log.i('# dropout: {}'.format(dropout))
-    Log.i('--------------------------------')
-    Log.v('')
-
-    assert n_layers >= 1
-    layers = [MLP.Layer(None, n_units, F.relu, dropout)
-              for i in range(n_layers - 1)]
-    layers.append(MLP.Layer(None, 10))
-    model = MLP(layers)
-    if gpu >= 0:
-        chainer.cuda.get_device_from_id(gpu).use()
-        chainer_config['converter'] = lambda x: to_device(x, gpu)
-        model.to_gpu()
-
-    optimizer = chainer.optimizers.Adam(
-        alpha=0.001, beta1=0.9, beta2=0.999, eps=1e-08)
-    optimizer.setup(model)
-    Log.i('optimizer: Adam(alpha=0.001, beta1=0.9, beta2=0.999, eps=1e-08)')
-
-    trainer = Trainer(optimizer, model, loss_func=F.softmax_cross_entropy,
-                      accuracy_func=F.accuracy)
-    trainer.configure(chainer_config)
-    trainer.fit(train_x, train_y,
-                batch_size=batch_size,
-                epochs=n_epoch,
-                validation_data=(test_x, test_y))
+    def forward(self, x):
+        h1 = chainer.functions.relu(self.l1(x))
+        h2 = chainer.functions.relu(self.l2(h1))
+        return self.l3(h2)
 
 
-def decode():
-    """define decode command"""
-    pass
+def set_chainer_train(enable=True):
+    chainer.config.train = enable
+    chainer.config.enable_backprop = enable
 
 
-App.add_command('train', train, {
-    'batch_size':
-    arg('--batchsize', '-b', type=int, default=100,
-        help='Number of examples in each mini-batch',
-        metavar='SIZE'),
-    'gpu':
-    arg('--gpu', '-g', type=int, default=-1,
-        help='use gpu device', metavar='DEVICE'),
-    'dropout':
-    arg('--dropout', '-dr', type=float, default=0.2,
-        help='dropout ratio', metavar='RATIO'),
-    'n_epoch':
-    arg('--epoch', '-e', type=int, default=20,
-        help='Number of sweeps over the dataset to train',
-        metavar='NUM'),
-    'n_layers':
-    arg('--layer', '-l', type=int, default=3,
-        help='Number of layers', metavar='NUM'),
-    'n_units':
-    arg('--unit', '-u', type=int, default=1000,
-        help='Number of units', metavar='NUM')
-}, description="exec train")
+chainer.Variable.__int__ = lambda self: int(self.data)
+chainer.Variable.__float__ = lambda self: float(self.data)
 
-App.add_command('decode', decode, {})
+
+def train(n_epoch=20, batch_size=100, n_units=1000, device=-1):
+    train, test = chainer.datasets.get_mnist()
+    train_x, train_y = [np.array(cols) for cols in zip(*train)]
+    test_x, test_y = [np.array(cols) for cols in zip(*test)]
+
+    model = MLP(n_units, 10)
+    if device >= 0:
+        chainer.cuda.get_device_from_id(device).use()
+        model.to_gpu(device)
+    optimizer = chainer.optimizers.Adam().setup(model)
+
+    trainer = training.Trainer(
+        optimizer, model,
+        loss_func=chainer.functions.softmax_cross_entropy,
+        accuracy_func=chainer.functions.accuracy)
+    trainer.configure(hooks={
+        training.EPOCH_TRAIN_BEGIN: lambda _: set_chainer_train(True),
+        training.EPOCH_VALIDATE_BEGIN: lambda _: set_chainer_train(False)
+    }, converter=lambda x: chainer.dataset.convert.to_device(device, x))
+    trainer.add_listener(
+        training.listeners.ProgressBar(lambda n: tqdm(total=n)), priority=200)
+    trainer.fit((train_x, train_y), (test_x, test_y), n_epoch, batch_size)
 
 
 if __name__ == "__main__":
     App.configure(name='chainer-mnist', logoption='d')
+    App.add_command('train', train, {
+        'batch_size':
+        arg('--batchsize', '-b', type=int, default=100,
+            help='Number of images in each mini-batch'),
+        'device':
+        arg('--device', type=int, default=-1, metavar='ID',
+            help='Device ID (negative value indicates CPU)'),
+        'n_epoch':
+        arg('--epoch', '-e', type=int, default=20,
+            help='Number of sweeps over the dataset to train'),
+        'n_units':
+        arg('--unit', '-u', type=int, default=1000,
+            help='Number of units'),
+    }, description="Execute training")
     App.run()
