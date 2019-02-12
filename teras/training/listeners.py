@@ -195,9 +195,10 @@ class Saver(Listener):
         with open(file, 'wb') as f:
             self._serializer.dump(model, f)
 
-    def load_context(self, model_file, deserializer=None):
+    @staticmethod
+    def load_context(model_file, deserializer=None):
         if deserializer is None:
-            deserializer = self.serializer
+            deserializer = pickle
         _dir, _file = os.path.split(model_file)
         context_file = os.path.basename(_file).split('.')[0] + '.context'
         context_file = os.path.join(_dir, context_file)
