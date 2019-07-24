@@ -1,3 +1,4 @@
+from collections import OrderedDict
 import os
 import pickle
 import logging
@@ -69,7 +70,7 @@ class Reporter(Listener):
     def __init__(self, logger, **kwargs):
         super().__init__(**kwargs)
         self._logger = logger
-        self._logs = {}
+        self._logs = OrderedDict()
         self._reported = 0
         self._history = []
 
@@ -95,7 +96,7 @@ class Reporter(Listener):
         self._reported += 1
 
     def get_summary(self):
-        summary = {}
+        summary = OrderedDict()
         for name, value in self._logs.items():
             if "accuracy" in name:
                 if isinstance(value, list):
@@ -119,7 +120,7 @@ class Reporter(Listener):
         self._history = []
 
     def on_epoch_train_begin(self, data):
-        self._logs = {}
+        self._logs.clear()
         self._reported = 0
 
     on_epoch_validate_begin = on_epoch_train_begin
