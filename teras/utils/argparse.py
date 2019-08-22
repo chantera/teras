@@ -356,6 +356,8 @@ class ConfigArgParser(ArgParser):
                 value = def_arg.kwargs.get('default', None)
             else:
                 value = _type(value)
+        elif def_arg.kwargs.get('action') == 'store_dict':
+            value = ast.literal_eval(value) if len(value) > 0 else dict()
         elif re.match(r"^(?:true|false)$", value, re.IGNORECASE):
             value = _getboolean(value)
         elif re.match(r"^\d+$", value):
