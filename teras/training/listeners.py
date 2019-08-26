@@ -60,8 +60,10 @@ _reporters = []
 
 
 def report(values):
-    if _reporters:
-        _reporters[-1].report(values)
+    if not _reporters:
+        return
+    for reporter in reversed(_reporters):
+        reporter.report(values)
 
 
 class Reporter(Listener):
