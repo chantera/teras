@@ -48,9 +48,7 @@ class Reader(Iterator):
         self._iterator = None
 
     def _get_iterator(self):
-        with open(self.file, mode='r', encoding='utf-8') as f:
-            for line in f:
-                yield line.strip()
+        raise NotImplementedError
 
     def __getstate__(self):
         state = self.__dict__.copy()
@@ -59,6 +57,59 @@ class Reader(Iterator):
 
     def __setstate__(self, state):
         self.__dict__.update(state)
+
+
+class LineReader(Reader):
+
+    def _get_iterator(self):
+        with open(self.file, mode='r', encoding='utf-8') as f:
+            for line in f:
+                yield line.strip()
+
+
+class CsvReader(Reader):
+
+    def __init__(self, file=None, delimiter=','):
+        super().__init__(file)
+        self.delimiter = delimiter
+
+    def _get_iterator(self):
+        with open(self.file, mode='r', encoding='utf-8') as f:
+            for line in f:
+                yield line.strip().split(self.delimiter)
+
+
+class ZipReader(Reader):
+
+    def __init__(self, readers):
+        self._readers = readers
+
+    def set_file(self, file):
+        if not isinstance(file, (tuple, list)):
+            file = [file]
+        return self.set_files(file)
+
+    def set_files(self, files):
+        if len(files) != len(self._readers):
+            raise ValueError('files must be given as many as readers')
+        self.reset()
+        for reader, file in zip(self._readers, files):
+            if file is not None:
+                reader.set_file(file)
+            else:
+                reader.file = None
+
+    def reset(self):
+        for reader in self._readers:
+            reader.reset()
+        self._iterator = None
+
+    def _get_iterator(self):
+        def _yield_null():
+            while True:
+                yield None
+        return zip(*[reader if reader.file is not None else _yield_null()
+                     for reader in self._readers])
 
 
 def _create_root(format='conll', extra_fields=None):
