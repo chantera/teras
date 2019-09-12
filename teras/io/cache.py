@@ -5,19 +5,23 @@ import pickle
 import logging
 
 
-def _resolve_path(key, dir='', ext='', prefix='', hash_len=16):
-    key_encoded = json.dumps(
-        key, sort_keys=True, separators=(',', ':')).encode('utf-8')
-    key_hash = hashlib.md5(key_encoded).hexdigest()
-    path = os.path.join(dir, prefix + key_hash[:hash_len] + ext)
-    return path
-
-
 class Cache(object):
     LOG_LEVEL = logging.DEBUG
 
     def __init__(self, key, dir='', ext='.pkl', prefix='', mkdir=False,
-                 serializer=None, deserializer=None, logger=None):
+                 hash_length=16, serializer=None, deserializer=None,
+                 logger=None):
+        self._config = {
+            'key': key,
+            'dir': dir,
+            'ext': ext,
+            'prefix': prefix,
+            'mkdir': mkdir,
+            'hash_length': hash_length,
+            'serializer': serializer,
+            'deserializer': deserializer,
+            'logger': logger,
+        }
         dir = os.path.abspath(os.path.expanduser(dir))
         if os.path.isdir(dir):
             pass
@@ -26,7 +30,8 @@ class Cache(object):
         else:
             raise FileNotFoundError(
                 "cache dir was not found: `{}`".format(dir))
-        self._file = _resolve_path(key, dir, ext, prefix)
+        self._identifier = self._encode_key(key)[:hash_length]
+        self._file = os.path.join(dir, prefix + self._identifier + ext)
         self._serializer = serializer \
             if serializer is not None else pickle
         self._deserializer = deserializer \
@@ -60,22 +65,36 @@ class Cache(object):
         with open(self._file, 'wb') as f:
             self._serializer.dump(obj, f)
 
+    def clone(self, key):
+        return Cache(**dict(self._config, key=key))
 
-def load(key, dir='', ext='.pkl', prefix='',
+    @property
+    def id(self):
+        return self._identifier
+
+    @staticmethod
+    def _encode_key(key):
+        key_encoded = json.dumps(
+            key, sort_keys=True, separators=(',', ':')).encode('utf-8')
+        key_hash = hashlib.md5(key_encoded).hexdigest()
+        return key_hash
+
+
+def load(key, dir='', ext='.pkl', prefix='', hash_length=16,
          serializer=None, deserializer=None, logger=None):
-    return Cache(key, dir, ext, prefix, False,
+    return Cache(key, dir, ext, prefix, False, hash_length,
                  serializer, deserializer, logger).load()
 
 
 def load_or_create(key, factory, refresh=False,
-                   dir='', ext='.pkl', prefix='', mkdir=False,
+                   dir='', ext='.pkl', prefix='', mkdir=False, hash_length=16,
                    serializer=None, deserializer=None, logger=None):
-    return Cache(key, dir, ext, prefix, mkdir,
+    return Cache(key, dir, ext, prefix, mkdir, hash_length,
                  serializer, deserializer, logger) \
         .load_or_create(factory, refresh)
 
 
-def dump(obj, key, dir='', ext='.pkl', prefix='', mkdir=False,
+def dump(obj, key, dir='', ext='.pkl', prefix='', mkdir=False, hash_length=16,
          serializer=None, deserializer=None, logger=None):
-    Cache(key, dir, ext, prefix, mkdir, serializer, deserializer, logger) \
-        .dump(obj)
+    Cache(key, dir, ext, prefix, mkdir, hash_length,
+          serializer, deserializer, logger).dump(obj)
