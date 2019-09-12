@@ -101,6 +101,11 @@ class CachedTextLoader(TextLoader):
                 instance._cache_io = cache_io
             return instance
 
+    def update_cache(self):
+        if self._cache_io is None:
+            raise RuntimeError('caching is not enabled')
+        self._cache_io.dump(self)
+
     def load(self, file, train=False, size=None, bucketing=False,
              extra_ids=None, refresh_cache=False):
         def _load():
