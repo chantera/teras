@@ -66,12 +66,12 @@ class Trainer(Dispatcher):
             do_validation = False
 
         self._reporter = listeners.Reporter(logging.getLogger())
-        self.add_listener(self._reporter, priority=150)
+        self.add_listener(self._reporter, priority=110)
         if self._acc_func is not None:
             def _report_accuracy(data):
                 listeners.report(
                     {"accuracy": self._acc_func(data['ys'], data['ts'])})
-            self.add_hook(TrainEvent.BATCH_END, _report_accuracy)
+            self.add_hook(TrainEvent.BATCH_END, _report_accuracy, priority=120)
 
         forward = self._forward
         if not callable(forward):

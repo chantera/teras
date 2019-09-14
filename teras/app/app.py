@@ -130,11 +130,14 @@ class App(AppBase):
         App.entry_point = entry_point
 
         app_name = App.DEFAULT_APP_NAME
+        version = None
         if os.path.exists(entry_point):
             repo = git.root(entry_point)
             if repo is not None:
                 app_name = os.path.basename(repo) + entry_point[len(repo):]
+                version = git.hash(entry_point)
         App.app_name = app_name
+        App.version = version
 
         App._static_initialized = True
 
@@ -222,6 +225,8 @@ class App(AppBase):
         logger.v(str(sys.version_info))
         logger.v(str(os.uname()))
         logger.i("sys.argv: %s" % str(sys.argv))
+        logger.v("version: %s (commit %s)"
+                 % (App.app_name.split('/')[0], App.version))
         logger.v("app._config: {}".format(self._config))
         logger.i("*** [START] ***")
 

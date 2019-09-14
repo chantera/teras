@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 
 from teras.dataset.dataset import Dataset, BucketDataset
+from teras.io.cache import Cache
 from teras.preprocessing import text
 
 
@@ -57,3 +58,69 @@ class TextLoader(Loader):
             return BucketDataset(samples, key=0, equalize_by_key=True)
         else:
             return Dataset(samples)
+
+
+class CachedTextLoader(TextLoader):
+    DEFAULT_CACHE_OPTIONS = {
+        'key': None,
+        'dir': None,
+        'ext': '.pkl',
+        'prefix': '',
+        'mkdir': False,
+        'hash_length': 16,
+        'serializer': None,
+        'deserializer': None,
+        'logger': None,
+    }
+    _cache_io = None
+
+    @classmethod
+    def build(cls, enable_cache=True, cache_options=None, extra_ids=None,
+              refresh_cache=False, **kwargs):
+        cache_io = None
+        if enable_cache:
+            if cache_options is None:
+                cache_options = dict()
+            cache_options = {**cls.DEFAULT_CACHE_OPTIONS, **cache_options}
+            if cache_options['dir'] is None:
+                raise FileNotFoundError("cache dir was must be specified")
+            elif cache_options['key'] is None:
+                cache_options['key'] = dict(kwargs, extra_ids=extra_ids)
+            cache_io = Cache(**cache_options)
+
+        def _instantiate():
+            instance = cls(**kwargs)
+            instance._cache_io = cache_io
+            return instance
+
+        if cache_io is None:
+            return _instantiate()
+        else:
+            instance = cache_io.load_or_create(_instantiate, refresh_cache)
+            if instance._cache_io is None:
+                instance._cache_io = cache_io
+            return instance
+
+    def update_cache(self):
+        if self._cache_io is None:
+            raise RuntimeError('caching is not enabled')
+        self._cache_io.dump(self)
+
+    def load(self, file, train=False, size=None, bucketing=False,
+             extra_ids=None, refresh_cache=False):
+        def _load():
+            return super(CachedTextLoader, self) \
+                .load(file, train, size, bucketing)
+
+        if self._cache_io is None:
+            return _load()
+        else:
+            hash_key = (self._cache_io.id,
+                        file, train, size, bucketing, extra_ids)
+            cache_io = self._cache_io.clone(hash_key)
+            return cache_io.load_or_create(_load, refresh_cache)
+
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        state['_cache_io'] = None
+        return state
