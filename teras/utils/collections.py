@@ -1,3 +1,4 @@
+import copy
 from collections.abc import MutableMapping, Mapping
 
 
@@ -87,6 +88,9 @@ class MutableMap(MutableMapping):
     def __iter__(self):
         return iter(self.data)
 
+    def __contains__(self, key):
+        return key in self.data
+
     def __getstate__(self):
         d = dict()
         d.update(self.data)
@@ -97,6 +101,22 @@ class MutableMap(MutableMapping):
 
     def __repr__(self):
         return self.data.__repr__()
+
+    def copy(self):
+        if self.__class__ is MutableMap:
+            return MutableMap(self.data.copy())
+        data = self.data
+        try:
+            self.data = {}
+            c = copy.copy(self)
+        finally:
+            self.data = data
+        c.update(self)
+        return c
+
+    @classmethod
+    def fromkeys(cls, iterable, value=None):
+        return cls((key, value) for key in iterable)
 
 
 class ImmutableMap(Mapping):
@@ -129,6 +149,9 @@ class ImmutableMap(Mapping):
     def __iter__(self):
         return iter(self.data)
 
+    def __contains__(self, key):
+        return key in self.data
+
     def __getstate__(self):
         d = dict()
         d.update(self.data)
@@ -139,3 +162,19 @@ class ImmutableMap(Mapping):
 
     def __repr__(self):
         return self.data.__repr__()
+
+    def copy(self):
+        if self.__class__ is ImmutableMap:
+            return ImmutableMap(self.data.copy())
+        data = self.data
+        try:
+            self.data = {}
+            c = copy.copy(self)
+        finally:
+            self.data = data
+        dict.update(c.data, self)
+        return c
+
+    @classmethod
+    def fromkeys(cls, iterable, value=None):
+        return cls((key, value) for key in iterable)
