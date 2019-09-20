@@ -1,4 +1,4 @@
-from collections.abc import Callable, MutableMapping, Mapping
+from collections.abc import MutableMapping, Mapping
 
 
 class ImmutableDict(dict):
@@ -12,33 +12,27 @@ class ImmutableDict(dict):
                         .format(type(self).__name__))
 
     def clear(self):
-        raise AttributeError("'{}' object has no attribute '{}'"
-                             .format(type(self).__name__, 'clear'))
+        raise TypeError("'{}' object does not support item deletion"
+                        .format(type(self).__name__))
 
     def update(self, *args, **kwargs):
-        raise AttributeError("'{}' object has no attribute '{}'"
-                             .format(type(self).__name__, 'update'))
+        raise TypeError("'{}' object does not support item assignment"
+                        .format(type(self).__name__))
 
     def setdefault(self, key, default=None):
-        raise AttributeError("'{}' object has no attribute '{}'"
-                             .format(type(self).__name__, 'setdefault'))
+        raise TypeError("'{}' object does not support item assignment"
+                        .format(type(self).__name__))
 
     def pop(self, key, default=None):
-        raise AttributeError("'{}' object has no attribute '{}'"
-                             .format(type(self).__name__, 'pop'))
+        raise TypeError("'{}' object does not support item deletion"
+                        .format(type(self).__name__))
 
     def popitem(self):
-        raise AttributeError("'{}' object has no attribute '{}'"
-                             .format(type(self).__name__, 'popitem'))
-
-    def __hash__(self):
-        return hash(tuple(sorted(self.items())))
+        raise TypeError("'{}' object does not support item deletion"
+                        .format(type(self).__name__))
 
 
-_default = object()
-
-
-class MutableMap(MutableMapping, Callable):
+class MutableMap(MutableMapping):
 
     def __init__(*args, **kwargs):
         if not args:
@@ -89,17 +83,6 @@ class MutableMap(MutableMapping, Callable):
     def __iter__(self):
         return iter(self.data)
 
-    def __call__(self, key, default=_default):
-        if default is not _default and key not in self:
-            return default
-        return self[key]
-
-    def __getattr__(self, name):
-        if name in self.data:
-            return self.data[name]
-        raise AttributeError("'{}' object has no attribute '{}'"
-                             .format(type(self).__name__, name))
-
     def __getstate__(self):
         d = dict()
         d.update(self.data)
@@ -111,11 +94,8 @@ class MutableMap(MutableMapping, Callable):
     def __repr__(self):
         return self.data.__repr__()
 
-    def __hash__(self):
-        return hash(self.data)
 
-
-class ImmutableMap(Mapping, Callable):
+class ImmutableMap(Mapping):
 
     def __init__(*args, **kwargs):
         if not args:
@@ -145,17 +125,6 @@ class ImmutableMap(Mapping, Callable):
     def __iter__(self):
         return iter(self.data)
 
-    def __call__(self, key, default=_default):
-        if default is not _default and key not in self:
-            return default
-        return self[key]
-
-    def __getattr__(self, name):
-        if name in self.data:
-            return self.data[name]
-        raise AttributeError("'{}' object has no attribute '{}'"
-                             .format(type(self).__name__, name))
-
     def __getstate__(self):
         d = dict()
         d.update(self.data)
@@ -166,6 +135,3 @@ class ImmutableMap(Mapping, Callable):
 
     def __repr__(self):
         return self.data.__repr__()
-
-    def __hash__(self):
-        return hash(self.data)
