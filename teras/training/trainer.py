@@ -2,6 +2,7 @@ from teras.dataset import Dataset
 from teras.training import listeners
 from teras.training.event import Dispatcher, TrainEvent
 from teras.utils import logging
+from teras.utils.collections import PseudoImmutableMap
 
 
 class Trainer(Dispatcher):
@@ -89,17 +90,17 @@ class Trainer(Dispatcher):
 
         def main_loop():
             for epoch in range(1, epochs + 1):
-                epoch_logs = {
-                    'epoch': epoch,
-                    'size': train_dataset.size,
-                }
+                epoch_logs = PseudoImmutableMap(
+                    epoch=epoch,
+                    size=train_dataset.size,
+                )
                 self.notify(TrainEvent.EPOCH_BEGIN, epoch_logs)
 
-                self._process(forward, train_dataset, lossfun,
-                              convert, batch_size, epoch_logs)
+                self._process(forward, train_dataset, lossfun, convert,
+                              batch_size, epoch_logs.copy(), train=True)
                 if do_validation:
-                    self._process(forward, val_dataset, lossfun,
-                                  convert, batch_size, epoch_logs, train=False)
+                    self._process(forward, val_dataset, lossfun, convert,
+                                  batch_size, epoch_logs.copy(), train=False)
 
                 self.notify(TrainEvent.EPOCH_END, epoch_logs)
 
@@ -119,16 +120,17 @@ class Trainer(Dispatcher):
                  lossfun,
                  convert,
                  batch_size,
-                 logs={}, train=True):
-        logs = logs.copy()
-        logs['size'] = dataset.size
+                 logs=None, train=True):
+        if logs is None:
+            logs = PseudoImmutableMap()
+        logs.data['size'] = dataset.size
         iterator = dataset.batch(batch_size, colwise=True, shuffle=train)
         num_batches = len(iterator)
-        logs['num_batches'] = num_batches
-        logs['loss'] = None
+        logs.data['num_batches'] = num_batches
+        logs.data['loss'] = None
         self.notify(TrainEvent.EPOCH_TRAIN_BEGIN
                     if train else TrainEvent.EPOCH_VALIDATE_BEGIN, logs)
-        logs['loss'] = 0.0
+        logs.data['loss'] = 0.0
         for batch_index, batch in enumerate(iterator):
             xs, ts = batch[:-1], batch[-1]
             if len(xs) == 1:
@@ -137,30 +139,30 @@ class Trainer(Dispatcher):
                 xs = convert(xs)
             ts = convert(ts)
 
-            batch_logs = {
-                'train': train,
-                'batch_index': batch_index,
-                'batch_size': len(ts),
-                'xs': xs,
-                'ts': ts,
-                'ys': None,
-                'loss': None,
-                'num_batches': num_batches,
-            }
+            batch_logs = PseudoImmutableMap(
+                train=train,
+                batch_index=batch_index,
+                batch_size=len(ts),
+                xs=xs,
+                ts=ts,
+                ys=None,
+                loss=None,
+                num_batches=num_batches,
+            )
             self.notify(TrainEvent.BATCH_BEGIN, batch_logs)
 
-            ys = forward(*xs)
-            loss = lossfun(ys, ts)
+            ys = forward(*batch_logs['xs'])
+            loss = lossfun(ys, batch_logs['ts'])
 
-            batch_logs['ys'] = ys
-            batch_logs['loss'] = loss.__float__()
-            logs['loss'] += loss.__float__()
+            batch_logs.data['ys'] = ys
+            batch_logs.data['loss'] = loss.__float__()
+            logs.data['loss'] += loss.__float__()
 
             if train:
                 self._update(self._optimizer, loss)
             self.notify(TrainEvent.BATCH_END, batch_logs)
             del loss
 
-        logs['loss'] /= num_batches
+        logs.data['loss'] /= num_batches
         self.notify(TrainEvent.EPOCH_TRAIN_END
                     if train else TrainEvent.EPOCH_VALIDATE_END, logs)
