@@ -31,6 +31,10 @@ class ImmutableDict(dict):
         raise TypeError("'{}' object does not support item deletion"
                         .format(type(self).__name__))
 
+    @classmethod
+    def fromkeys(cls, iterable, value=None):
+        return cls((key, value) for key in iterable)
+
 
 class MutableMap(MutableMapping):
 
