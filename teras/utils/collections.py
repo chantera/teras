@@ -178,3 +178,24 @@ class ImmutableMap(Mapping):
     @classmethod
     def fromkeys(cls, iterable, value=None):
         return cls((key, value) for key in iterable)
+
+
+class PseudoImmutableMap(ImmutableMap):
+    def __init__(*args, **kwargs):
+        self, *args = args
+        self.data = dict(ImmutableMap(*args, **kwargs).data)
+
+    def __setstate__(self, state):
+        self.data = dict(state)
+
+    def copy(self):
+        if self.__class__ is PseudoImmutableMap:
+            return PseudoImmutableMap(self.data.copy())
+        data = self.data
+        try:
+            self.data = {}
+            c = copy.copy(self)
+        finally:
+            self.data = data
+        c.data.update(self)
+        return c
