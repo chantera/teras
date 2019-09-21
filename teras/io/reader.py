@@ -327,3 +327,68 @@ def read_tree(file, left_bracket='(', right_bracket=')'):
 
 def parse_tree(text, left_bracket='(', right_bracket=')'):
     return list(_parse_tree(text, left_bracket, right_bracket))
+
+
+class ContextualizedEmbeddingsReader(Reader):
+
+    def _get_iterator(self):
+        with ContextualizedEmbeddingsFile.open(self.file) as f:
+            for value in f:
+                yield value
+
+
+class ContextualizedEmbeddingsFile(object):
+
+    def __init__(self, file):
+        handle = None
+        try:
+            import h5py
+            handle = h5py.File(file, 'r')
+        except Exception as e:
+            raise e
+        self._file = file
+        self._handle = handle
+        self._sentence_id = -1
+
+    @classmethod
+    def open(cls, file):
+        return cls(file)
+
+    def close(self):
+        if not self.closed:
+            self._handle.close()
+            self._handle = None
+
+    @property
+    def closed(self):
+        return self._handle is None
+
+    def _check_closed(self):
+        if self.closed:
+            raise ValueError("I/O operation on closed file.")
+
+    def __del__(self):
+        try:
+            self.close()
+        except Exception:
+            pass
+
+    def __enter__(self):
+        self._check_closed()
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.close()
+
+    def __iter__(self):
+        self._check_closed()
+        return self
+
+    def __next__(self):
+        self._check_closed()
+        self._sentence_id += 1
+        key = str(self._sentence_id)
+        if key not in self._handle:
+            raise StopIteration
+        value = self._handle[key][...]
+        return value
