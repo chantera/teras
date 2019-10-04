@@ -4,7 +4,7 @@ import pickle
 import logging
 
 from teras.training.event import Listener
-from teras.utils import collections
+from teras.utils.collections import ImmutableMap
 
 
 class ProgressBar(Listener):
@@ -167,12 +167,24 @@ class Reporter(Listener):
 class Saver(Listener):
     name = "saver"
 
+    class Context(ImmutableMap):
+        def __getattr__(self, name):
+            if name in self.data:
+                return self.data[name]
+            raise AttributeError("'{}' object has no attribute '{}'"
+                                 .format(type(self).__name__, name))
+
+        def __hash__(self):
+            return hash(tuple(sorted(self.data.items())))
+
     def __init__(self, model, basename, directory='', context=None, interval=1,
                  save_from=None, save_best=False, evaluate=None,
                  serializer=None, logger=None, **kwargs):
         super().__init__(**kwargs)
         self._model = model
         self._basename = os.path.join(os.path.expanduser(directory), basename)
+        if context is not None and not isinstance(context, Saver.Context):
+            context = Saver.Context(context)
         self._context = context
         if not isinstance(interval, int):
             raise ValueError("interval must be specified as int value: "
@@ -187,6 +199,8 @@ class Saver(Listener):
             if logger is not None else logging.getLogger(__name__)
 
     def save_context(self, context):
+        if not isinstance(context, Saver.Context):
+            raise TypeError('`context` must be a Saver.Context object')
         file = self._basename + '.context'
         self._logger.info("saving the context to {} ...".format(file))
         with open(file, 'wb') as f:
@@ -206,7 +220,7 @@ class Saver(Listener):
         context_file = os.path.basename(_file).split('.')[0] + '.context'
         context_file = os.path.join(_dir, context_file)
         with open(context_file, 'rb') as f:
-            context = collections.ImmutableMap(deserializer.load(f))
+            context = deserializer.load(f)
         return context
 
     def on_train_begin(self, data):

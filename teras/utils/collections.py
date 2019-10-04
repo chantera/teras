@@ -1,4 +1,5 @@
-from collections.abc import Callable, MutableMapping, Mapping
+import copy
+from collections.abc import MutableMapping, Mapping
 
 
 class ImmutableDict(dict):
@@ -12,33 +13,31 @@ class ImmutableDict(dict):
                         .format(type(self).__name__))
 
     def clear(self):
-        raise AttributeError("'{}' object has no attribute '{}'"
-                             .format(type(self).__name__, 'clear'))
+        raise TypeError("'{}' object does not support item deletion"
+                        .format(type(self).__name__))
 
     def update(self, *args, **kwargs):
-        raise AttributeError("'{}' object has no attribute '{}'"
-                             .format(type(self).__name__, 'update'))
+        raise TypeError("'{}' object does not support item assignment"
+                        .format(type(self).__name__))
 
     def setdefault(self, key, default=None):
-        raise AttributeError("'{}' object has no attribute '{}'"
-                             .format(type(self).__name__, 'setdefault'))
+        raise TypeError("'{}' object does not support item assignment"
+                        .format(type(self).__name__))
 
     def pop(self, key, default=None):
-        raise AttributeError("'{}' object has no attribute '{}'"
-                             .format(type(self).__name__, 'pop'))
+        raise TypeError("'{}' object does not support item deletion"
+                        .format(type(self).__name__))
 
     def popitem(self):
-        raise AttributeError("'{}' object has no attribute '{}'"
-                             .format(type(self).__name__, 'popitem'))
+        raise TypeError("'{}' object does not support item deletion"
+                        .format(type(self).__name__))
 
-    def __hash__(self):
-        return hash(tuple(sorted(self.items())))
-
-
-_default = object()
+    @classmethod
+    def fromkeys(cls, iterable, value=None):
+        return cls((key, value) for key in iterable)
 
 
-class MutableMap(MutableMapping, Callable):
+class MutableMap(MutableMapping):
 
     def __init__(*args, **kwargs):
         if not args:
@@ -89,16 +88,8 @@ class MutableMap(MutableMapping, Callable):
     def __iter__(self):
         return iter(self.data)
 
-    def __call__(self, key, default=_default):
-        if default is not _default and key not in self:
-            return default
-        return self[key]
-
-    def __getattr__(self, name):
-        if name in self.data:
-            return self.data[name]
-        raise AttributeError("'{}' object has no attribute '{}'"
-                             .format(type(self).__name__, name))
+    def __contains__(self, key):
+        return key in self.data
 
     def __getstate__(self):
         d = dict()
@@ -111,11 +102,24 @@ class MutableMap(MutableMapping, Callable):
     def __repr__(self):
         return self.data.__repr__()
 
-    def __hash__(self):
-        return hash(self.data)
+    def copy(self):
+        if self.__class__ is MutableMap:
+            return MutableMap(self.data.copy())
+        data = self.data
+        try:
+            self.data = {}
+            c = copy.copy(self)
+        finally:
+            self.data = data
+        c.update(self)
+        return c
+
+    @classmethod
+    def fromkeys(cls, iterable, value=None):
+        return cls((key, value) for key in iterable)
 
 
-class ImmutableMap(Mapping, Callable):
+class ImmutableMap(Mapping):
 
     def __init__(*args, **kwargs):
         if not args:
@@ -145,16 +149,8 @@ class ImmutableMap(Mapping, Callable):
     def __iter__(self):
         return iter(self.data)
 
-    def __call__(self, key, default=_default):
-        if default is not _default and key not in self:
-            return default
-        return self[key]
-
-    def __getattr__(self, name):
-        if name in self.data:
-            return self.data[name]
-        raise AttributeError("'{}' object has no attribute '{}'"
-                             .format(type(self).__name__, name))
+    def __contains__(self, key):
+        return key in self.data
 
     def __getstate__(self):
         d = dict()
@@ -167,5 +163,39 @@ class ImmutableMap(Mapping, Callable):
     def __repr__(self):
         return self.data.__repr__()
 
-    def __hash__(self):
-        return hash(self.data)
+    def copy(self):
+        if self.__class__ is ImmutableMap:
+            return ImmutableMap(self.data.copy())
+        data = self.data
+        try:
+            self.data = {}
+            c = copy.copy(self)
+        finally:
+            self.data = data
+        dict.update(c.data, self)
+        return c
+
+    @classmethod
+    def fromkeys(cls, iterable, value=None):
+        return cls((key, value) for key in iterable)
+
+
+class PseudoImmutableMap(ImmutableMap):
+    def __init__(*args, **kwargs):
+        self, *args = args
+        self.data = dict(ImmutableMap(*args, **kwargs).data)
+
+    def __setstate__(self, state):
+        self.data = dict(state)
+
+    def copy(self):
+        if self.__class__ is PseudoImmutableMap:
+            return PseudoImmutableMap(self.data.copy())
+        data = self.data
+        try:
+            self.data = {}
+            c = copy.copy(self)
+        finally:
+            self.data = data
+        c.data.update(self)
+        return c
