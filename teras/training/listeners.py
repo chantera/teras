@@ -3,6 +3,7 @@ import os
 import pickle
 import logging
 
+import numpy as np
 from teras.training.event import Listener
 from teras.utils.collections import ImmutableMap
 
@@ -84,7 +85,11 @@ class Reporter(Listener):
 
     def report(self, values):
         for name, value in values.items():
-            if "accuracy" in name:
+            if name != "loss" and "loss" in name:
+                loss = self._logs.get(name, [])
+                loss.append(float(value))
+                values[name] = loss
+            elif "accuracy" in name:
                 accuracy = self._logs.get(name, 0.0)
                 if isinstance(value, (tuple, list)) and len(value) == 2:
                     if isinstance(accuracy, float):
@@ -100,12 +105,14 @@ class Reporter(Listener):
     def get_summary(self):
         summary = OrderedDict()
         for name, value in self._logs.items():
-            if "accuracy" in name:
+            if name != "loss" and "loss" in name:
+                n = len(value)
+                summary[name] = sum(value) / n if n > 0 else np.nan
+            elif "accuracy" in name:
                 if isinstance(value, list):
                     correct, total = value[:2]
                     if total == 0:
-                        import numpy
-                        accuracy = numpy.nan
+                        accuracy = np.nan
                     else:
                         accuracy = correct / total
                 else:
