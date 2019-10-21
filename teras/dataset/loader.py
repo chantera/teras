@@ -121,12 +121,12 @@ class CachedTextLoader(TextLoader):
         self._cache_io.dump(self)
 
     def load(self, file, train=False, size=None, bucketing=False,
-             extra_ids=None, refresh_cache=False):
+             extra_ids=None, refresh_cache=False, disable_cache=False):
         def _load():
             return super(CachedTextLoader, self) \
                 .load(file, train, size, bucketing)
 
-        if self._cache_io is None:
+        if self._cache_io is None or disable_cache:
             return _load()
         else:
             hash_key = (self._cache_io.id,
