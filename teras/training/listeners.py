@@ -88,7 +88,7 @@ class Reporter(Listener):
             if name != "loss" and "loss" in name:
                 loss = self._logs.get(name, [])
                 loss.append(float(value))
-                values[name] = loss
+                value = loss
             elif "accuracy" in name:
                 accuracy = self._logs.get(name, 0.0)
                 if isinstance(value, (tuple, list)) and len(value) == 2:
@@ -98,8 +98,8 @@ class Reporter(Listener):
                     accuracy[1] += value[1]
                 else:
                     accuracy += float(value)
-                values[name] = accuracy
-        self._logs.update(values)
+                value = accuracy
+            self._logs[name] = value
         self._reported += 1
 
     def get_summary(self):
