@@ -113,6 +113,9 @@ class Vocab(object):
         self._dict = Dict()
         self._unknown_id = self._dict[unknown]
 
+    def get(self, key, default=None):
+        return self._dict.get(key, default)
+
     def add(self, word):
         return self._dict.add(word)
 
