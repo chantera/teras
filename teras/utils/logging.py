@@ -368,9 +368,12 @@ v = trace
 
 
 _warnings_showwarning = None
+_warnings_showline = False
 
 
 def _showwarning(message, category, filename, lineno, file=None, line=None):
+    if not _warnings_showline:
+        line = ''
     if file is not None:
         if _warnings_showwarning is not None:
             _warnings_showwarning(

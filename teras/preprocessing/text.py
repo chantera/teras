@@ -113,6 +113,9 @@ class Vocab(object):
         self._dict = Dict()
         self._unknown_id = self._dict[unknown]
 
+    def get(self, key, default=None):
+        return self._dict.get(key, default)
+
     def add(self, word):
         return self._dict.add(word)
 
@@ -230,7 +233,8 @@ class EmbeddingVocab(Vocab):
         return embeddings
 
 
-def load_embeddings(embed_file, vocab_file=None, dtype=np.float32):
+def load_embeddings(embed_file, vocab_file=None, dtype=np.float32,
+                    delimiter=' '):
     vocabulary = Dict()
     embeddings = []
     embed_file = os.path.expanduser(embed_file)
@@ -238,8 +242,8 @@ def load_embeddings(embed_file, vocab_file=None, dtype=np.float32):
         vocab_file = os.path.expanduser(vocab_file)
         with open(embed_file) as ef, open(vocab_file) as vf:
             for line1, line2 in zip(ef, vf):
-                word = line2.strip()
-                vector = line1.strip().split()
+                word = line2.rstrip('\r\n')
+                vector = line1.rstrip('\r\n').split(delimiter)
                 if word not in vocabulary:
                     vocabulary.add(word)
                     embeddings.append(np.array(vector, dtype=dtype))
@@ -247,10 +251,10 @@ def load_embeddings(embed_file, vocab_file=None, dtype=np.float32):
         with open(embed_file) as f:
             lines = f.readlines()
             index = 0
-            if len(lines[0].strip().split()) <= 2:
+            if len(lines[0].rstrip('\r\n').split(delimiter)) <= 2:
                 index = 1  # skip header
             for line in lines[index:]:
-                cols = line.strip().split()
+                cols = line.rstrip('\r\n').split(delimiter)
                 word = cols[0]
                 if word not in vocabulary:
                     vocabulary.add(word)

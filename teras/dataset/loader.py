@@ -17,6 +17,7 @@ class TextLoader(Loader):
         self._reader = reader
         self._processors = {}
         self.train = False
+        self._context = None
 
     def add_processor(self, name, *args, **kwargs):
         self._processors[name] = text.Preprocessor(*args, **kwargs)
@@ -42,18 +43,31 @@ class TextLoader(Loader):
     def load(self, file, train=False, size=None, bucketing=False):
         self.train = train
         self._reader.set_file(file)
+        self._context = {
+            'train': train,
+            'item_index': -1,
+            'num_samples': 0,
+        }
+
+        def _next_sample(reader):
+            context = self._context
+            for item in reader:
+                context['item_index'] += 1
+                if self.filter(item):
+                    sample = self.map(item)
+                    context['num_samples'] += 1
+                    yield sample
+
         if size is None:
-            samples = [self.map(item) for item in self._reader
-                       if self.filter(item)]
+            samples = list(_next_sample(self._reader))
         else:
             samples = []
-            for item in self._reader:
+            for sample in _next_sample(self._reader):
+                samples.append(sample)
                 if len(samples) >= size:
                     break
-                if not self.filter(item):
-                    continue
-                samples.append(self.map(item))
 
+        self._context = None
         if bucketing:
             return BucketDataset(samples, key=0, equalize_by_key=True)
         else:
@@ -107,12 +121,12 @@ class CachedTextLoader(TextLoader):
         self._cache_io.dump(self)
 
     def load(self, file, train=False, size=None, bucketing=False,
-             extra_ids=None, refresh_cache=False):
+             extra_ids=None, refresh_cache=False, disable_cache=False):
         def _load():
             return super(CachedTextLoader, self) \
                 .load(file, train, size, bucketing)
 
-        if self._cache_io is None:
+        if self._cache_io is None or disable_cache:
             return _load()
         else:
             hash_key = (self._cache_io.id,

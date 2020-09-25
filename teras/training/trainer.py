@@ -43,7 +43,8 @@ class Trainer(Dispatcher):
         if 'converter' in config:
             self._converter = config['converter']
 
-    def fit(self, data, valid_data=None, epochs=10, batch_size=32):
+    def fit(self, data, valid_data=None, epochs=10, batch_size=32,
+            valid_batch_size=None):
         if isinstance(data, Dataset):
             train_dataset = data
         elif isinstance(data, (tuple, list)) and len(data) == 2:
@@ -63,6 +64,8 @@ class Trainer(Dispatcher):
                                  'it must be dataset or contain '
                                  'two (x_val, y_val) items: {}'
                                  .format(type(valid_data)))
+            if valid_batch_size is None:
+                valid_batch_size = batch_size
         else:
             do_validation = False
 
@@ -99,8 +102,9 @@ class Trainer(Dispatcher):
                 self._process(forward, train_dataset, lossfun, convert,
                               batch_size, epoch_logs.copy(), train=True)
                 if do_validation:
-                    self._process(forward, val_dataset, lossfun, convert,
-                                  batch_size, epoch_logs.copy(), train=False)
+                    self._process(
+                        forward, val_dataset, lossfun, convert,
+                        valid_batch_size, epoch_logs.copy(), train=False)
 
                 self.notify(TrainEvent.EPOCH_END, epoch_logs)
 
